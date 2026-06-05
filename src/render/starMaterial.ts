@@ -1,32 +1,53 @@
 import * as THREE from "three";
 
-export function createStarMaterial(): THREE.ShaderMaterial {
+interface StarMaterialOptions {
+  sizeScale?: number;
+  opacity?: number;
+  twinkle?: boolean;
+}
+
+export function createStarMaterial(options: StarMaterialOptions = {}): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     uniforms: {
-      uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, 2) }
+      uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, 2) },
+      uSizeScale: { value: options.sizeScale ?? 1 },
+      uOpacity: { value: options.opacity ?? 1 },
+      uTime: { value: 0 },
+      uTwinkle: { value: options.twinkle ? 1 : 0 }
     },
     vertexShader: `
+      uniform float uPixelRatio;
+      uniform float uSizeScale;
+      uniform float uTime;
+      uniform int uTwinkle;
       attribute float magnitude;
       attribute float bv;
       varying float vMagnitude;
       varying float vBv;
+      varying float vTwinkle;
 
       void main() {
         vMagnitude = magnitude;
         vBv = bv;
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
         float brightness = clamp((6.8 - magnitude) / 6.8, 0.08, 1.0);
-        gl_PointSize = (2.0 + brightness * 7.0) * uPixelRatio;
+        float twinkle = uTwinkle == 1 ? 0.9 + 0.1 * sin(uTime * 2.4 + position.x * 0.037 + position.y * 0.021) : 1.0;
+        vTwinkle = twinkle;
+        float attenuated = 320.0 / max(80.0, -mvPosition.z);
+        float rawSize = (2.0 + brightness * 7.0) * uPixelRatio * uSizeScale * attenuated;
+        gl_PointSize = clamp(rawSize, 1.0, 14.0 * uPixelRatio);
         gl_Position = projectionMatrix * mvPosition;
       }
     `,
     fragmentShader: `
       precision highp float;
+      uniform float uOpacity;
       varying float vMagnitude;
       varying float vBv;
+      varying float vTwinkle;
 
       float clamp01(float value) {
         return clamp(value, 0.0, 1.0);
@@ -64,11 +85,12 @@ export function createStarMaterial(): THREE.ShaderMaterial {
 
       void main() {
         vec2 uv = gl_PointCoord - vec2(0.5);
-        float dist = length(uv);
-        float alpha = smoothstep(0.5, 0.0, dist);
-        float brightness = pow(clamp((6.8 - vMagnitude) / 6.8, 0.08, 1.0), 1.4);
+        float d = length(uv);
+        if (d > 0.5) discard;
+        float alpha = smoothstep(0.5, 0.0, d);
+        float brightness = pow(clamp((6.8 - vMagnitude) / 6.8, 0.08, 1.0), 1.4) * vTwinkle;
         vec3 color = kelvinToRgb(bvToKelvin(vBv));
-        gl_FragColor = vec4(color * brightness, alpha * brightness);
+        gl_FragColor = vec4(color * brightness, alpha * brightness * uOpacity);
       }
     `
   });

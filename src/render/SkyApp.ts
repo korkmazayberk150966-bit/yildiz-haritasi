@@ -17,29 +17,35 @@ interface SkyAppOptions {
 }
 
 const LAYERS: LayerId[] = ["sky", "solar-system", "milky-way", "cosmic-web"];
+const SKY_RADIUS = 180;
+const HORIZON_RADIUS = 120;
 
 export class SkyApp {
   private scene = new THREE.Scene();
-  private camera = new THREE.PerspectiveCamera(65, 1, 0.01, 5000);
+  private camera = new THREE.PerspectiveCamera(68, 1, 0.01, 5000);
   private renderer: THREE.WebGLRenderer;
   private groups = new Map<LayerId, THREE.Group>();
   private quality: QualityProfile;
   private qualityController: AdaptiveQualityController;
   private animation = 0;
   private activeLayer: LayerId = "sky";
-  private rotation = new THREE.Vector2(0.2, 0.1);
-  private targetRotation = new THREE.Vector2(0.2, 0.1);
+  private rotation = new THREE.Vector2(0, 0.14);
+  private targetRotation = new THREE.Vector2(0, 0.14);
   private zoom = 1;
   private dragging = false;
   private lastPointer = new THREE.Vector2();
   private solarSystemLayer?: SolarSystemLayer;
   private lastFrame = performance.now();
+  private targetFov = 68;
+  private activePointers = new Map<number, THREE.Vector2>();
+  private lastPinchDistance?: number;
+  private starMaterials: THREE.ShaderMaterial[] = [];
 
   constructor(private options: SkyAppOptions) {
     this.quality = detectInitialQuality();
     this.renderer = new THREE.WebGLRenderer({ antialias: this.quality.antialias, alpha: false, powerPreference: "high-performance" });
     this.qualityController = new AdaptiveQualityController(this.quality, (profile) => this.applyQuality(profile));
-    this.camera.position.set(0, 0, 2.25);
+    this.camera.position.set(0, 0.02, 0);
     this.renderer.setClearColor("#050712", 1);
     this.renderer.setPixelRatio(this.quality.pixelRatio);
     this.options.container.appendChild(this.renderer.domElement);
@@ -63,6 +69,14 @@ export class SkyApp {
     for (const [id, group] of this.groups) group.visible = id === layer;
     this.zoom = LAYERS.indexOf(layer) + 1;
     this.options.onLayerChange(layer);
+    if (layer === "sky") {
+      this.camera.position.set(0, 0.02, 0);
+      this.targetFov = THREE.MathUtils.clamp(this.targetFov, 38, 78);
+    } else {
+      this.camera.position.set(0, 0, 2.25);
+      this.camera.fov = 65;
+      this.camera.updateProjectionMatrix();
+    }
     if (layer === "solar-system") {
       void this.ensureSolarSystemLayer();
     }
@@ -102,7 +116,21 @@ export class SkyApp {
     geometry.setAttribute("position", new THREE.BufferAttribute(stars.positions, 3));
     geometry.setAttribute("magnitude", new THREE.BufferAttribute(stars.meta.filter((_, index) => index % 2 === 0), 1));
     geometry.setAttribute("bv", new THREE.BufferAttribute(stars.meta.filter((_, index) => index % 2 === 1), 1));
-    group.add(new THREE.Points(geometry, createStarMaterial()));
+    const starMaterial = createStarMaterial({ twinkle: this.quality.name === "high" });
+    this.starMaterials.push(starMaterial);
+    const starField = new THREE.Points(geometry, starMaterial);
+    starField.scale.setScalar(SKY_RADIUS);
+    group.add(this.createAtmosphereDome());
+    group.add(this.createGround());
+    group.add(this.createMilkyWayBand());
+    group.add(starField);
+    if (this.quality.name !== "low") {
+      const glowMaterial = createStarMaterial({ sizeScale: 2.4, opacity: 0.18 });
+      this.starMaterials.push(glowMaterial);
+      const glow = new THREE.Points(geometry, glowMaterial);
+      glow.scale.setScalar(SKY_RADIUS);
+      group.add(glow);
+    }
     group.add(this.createConstellations());
     group.add(this.createHorizon());
     this.addDirectionLabels(group);
@@ -113,7 +141,7 @@ export class SkyApp {
     const points: THREE.Vector3[] = [];
     for (let i = 0; i <= 128; i += 1) {
       const angle = (i / 128) * Math.PI * 2;
-      points.push(new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle)));
+      points.push(new THREE.Vector3(Math.sin(angle) * HORIZON_RADIUS, 0, Math.cos(angle) * HORIZON_RADIUS));
     }
     const material = new THREE.LineBasicMaterial({ color: "#4d6a96", transparent: true, opacity: 0.75 });
     return new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material);
@@ -123,25 +151,25 @@ export class SkyApp {
     const positions = new Float32Array(CONSTELLATION_SEGMENTS.length * 2 * 3);
     CONSTELLATION_SEGMENTS.forEach((segment, index) => {
       const [from, to] = constellationSegmentToVectors(segment, this.options.observation.utcDate, this.options.location);
-      positions.set(from, index * 6);
-      positions.set(to, index * 6 + 3);
+      positions.set(from.map((value) => value * SKY_RADIUS), index * 6);
+      positions.set(to.map((value) => value * SKY_RADIUS), index * 6 + 3);
     });
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     return new THREE.LineSegments(
       geometry,
-      new THREE.LineBasicMaterial({ color: "#5f7fb8", transparent: true, opacity: 0.42 })
+      new THREE.LineBasicMaterial({ color: "#6d88b8", transparent: true, opacity: 0.22, depthWrite: false })
     );
   }
 
   private addDirectionLabels(group: THREE.Group): void {
     const labels: Array<[string, number, number, number]> = [
-      ["K", 0, 0, 1.08],
-      ["D", 1.08, 0, 0],
-      ["G", 0, 0, -1.08],
-      ["B", -1.08, 0, 0]
+      ["K", 0, 2.4, HORIZON_RADIUS],
+      ["D", HORIZON_RADIUS, 2.4, 0],
+      ["G", 0, 2.4, -HORIZON_RADIUS],
+      ["B", -HORIZON_RADIUS, 2.4, 0]
     ];
-    labels.forEach(([text, x, y, z]) => group.add(this.createSpriteLabel(text, new THREE.Vector3(x, y, z), "#9fb9e8")));
+    labels.forEach(([text, x, y, z]) => group.add(this.createSpriteLabel(text, new THREE.Vector3(x, y, z), "#9fb9e8", 7)));
   }
 
   private addSolarLabels(group: THREE.Group): void {
@@ -149,15 +177,88 @@ export class SkyApp {
     objects.forEach((object) => {
       const alt = THREE.MathUtils.degToRad(object.altitude);
       const az = THREE.MathUtils.degToRad(object.azimuth);
-      const position = new THREE.Vector3(Math.cos(alt) * Math.sin(az), Math.sin(alt), Math.cos(alt) * Math.cos(az));
+      const position = new THREE.Vector3(
+        Math.cos(alt) * Math.sin(az) * SKY_RADIUS,
+        Math.sin(alt) * SKY_RADIUS,
+        Math.cos(alt) * Math.cos(az) * SKY_RADIUS
+      );
       const marker = new THREE.Mesh(
-        new THREE.SphereGeometry(0.012, 16, 16),
-        new THREE.MeshBasicMaterial({ color: object.color })
+        new THREE.SphereGeometry(0.6, 16, 16),
+        new THREE.MeshBasicMaterial({ color: object.color, transparent: true, opacity: 0.95 })
       );
       marker.position.copy(position);
       group.add(marker);
-      group.add(this.createSpriteLabel(object.name, position.clone().multiplyScalar(1.06), object.color));
+      group.add(this.createSpriteLabel(object.name, position.clone().multiplyScalar(1.006), object.color, 9));
     });
+  }
+
+  private createAtmosphereDome(): THREE.Mesh {
+    const material = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      depthWrite: false,
+      uniforms: {
+        uHorizonGlow: { value: this.quality.name === "low" ? 0.18 : 0.32 }
+      },
+      vertexShader: `
+        varying vec3 vWorld;
+
+        void main() {
+          vec4 world = modelMatrix * vec4(position, 1.0);
+          vWorld = normalize(world.xyz);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+        uniform float uHorizonGlow;
+        varying vec3 vWorld;
+
+        void main() {
+          float horizon = pow(1.0 - clamp(vWorld.y, 0.0, 1.0), 2.2);
+          vec3 zenith = vec3(0.015, 0.027, 0.075);
+          vec3 lowSky = vec3(0.08, 0.13, 0.22) * uHorizonGlow;
+          gl_FragColor = vec4(mix(zenith, lowSky, horizon), 1.0);
+        }
+      `
+    });
+    return new THREE.Mesh(new THREE.SphereGeometry(SKY_RADIUS * 0.995, 32, 16), material);
+  }
+
+  private createGround(): THREE.Mesh {
+    const geometry = new THREE.CircleGeometry(HORIZON_RADIUS * 1.4, 96);
+    const material = new THREE.MeshBasicMaterial({ color: "#02040a", transparent: true, opacity: 0.86, depthWrite: true });
+    const ground = new THREE.Mesh(geometry, material);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.04;
+    return ground;
+  }
+
+  private createMilkyWayBand(): THREE.Points {
+    const count = this.quality.name === "low" ? 550 : this.quality.name === "medium" ? 1200 : 2200;
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    const tilt = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(THREE.MathUtils.degToRad(62), 0, THREE.MathUtils.degToRad(28)));
+    for (let i = 0; i < count; i += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const band = (Math.random() - 0.5) * 0.18;
+      const radius = SKY_RADIUS * (0.985 + Math.random() * 0.01);
+      const vector = new THREE.Vector3(Math.cos(angle), band, Math.sin(angle)).normalize().applyMatrix4(tilt).multiplyScalar(radius);
+      positions.set([vector.x, vector.y, vector.z], i * 3);
+      const warmth = 0.72 + Math.random() * 0.24;
+      colors.set([0.42 * warmth, 0.52 * warmth, 0.78 * warmth], i * 3);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    const material = new THREE.PointsMaterial({
+      size: this.quality.name === "low" ? 0.38 : 0.58,
+      vertexColors: true,
+      transparent: true,
+      opacity: this.quality.name === "low" ? 0.12 : 0.2,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    return new THREE.Points(geometry, material);
   }
 
   private async ensureSolarSystemLayer(): Promise<void> {
@@ -190,7 +291,7 @@ export class SkyApp {
     group.add(this.createSpriteLabel(text, new THREE.Vector3(0, radius * 0.1, 0), "#dbe7ff"));
   }
 
-  private createSpriteLabel(text: string, position: THREE.Vector3, color: string): THREE.Sprite {
+  private createSpriteLabel(text: string, position: THREE.Vector3, color: string, worldScale = 0.38): THREE.Sprite {
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d")!;
     canvas.width = 512;
@@ -200,9 +301,10 @@ export class SkyApp {
     context.textAlign = "center";
     context.textBaseline = "middle";
     context.fillText(text, canvas.width / 2, canvas.height / 2, canvas.width - 24);
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true }));
+    const texture = new THREE.CanvasTexture(canvas);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }));
     sprite.position.copy(position);
-    sprite.scale.set(0.38, 0.095, 1);
+    sprite.scale.set(worldScale, worldScale * 0.25, 1);
     return sprite;
   }
 
@@ -211,23 +313,41 @@ export class SkyApp {
     canvas.addEventListener("pointerdown", (event) => {
       this.dragging = true;
       this.lastPointer.set(event.clientX, event.clientY);
+      this.activePointers.set(event.pointerId, new THREE.Vector2(event.clientX, event.clientY));
       canvas.setPointerCapture(event.pointerId);
     });
     canvas.addEventListener("pointermove", (event) => {
+      this.activePointers.set(event.pointerId, new THREE.Vector2(event.clientX, event.clientY));
+      if (this.activePointers.size === 2) {
+        const [first, second] = [...this.activePointers.values()];
+        const distance = first.distanceTo(second);
+        if (this.lastPinchDistance) {
+          this.targetFov = THREE.MathUtils.clamp(this.targetFov - (distance - this.lastPinchDistance) * 0.08, 28, 82);
+        }
+        this.lastPinchDistance = distance;
+        return;
+      }
       if (!this.dragging) return;
       const dx = event.clientX - this.lastPointer.x;
       const dy = event.clientY - this.lastPointer.y;
-      this.targetRotation.x += dx * 0.004;
-      this.targetRotation.y += dy * 0.004;
+      this.targetRotation.x -= dx * 0.0032;
+      this.targetRotation.y = THREE.MathUtils.clamp(this.targetRotation.y - dy * 0.0032, -1.35, 1.35);
       this.lastPointer.set(event.clientX, event.clientY);
     });
-    canvas.addEventListener("pointerup", () => {
-      this.dragging = false;
-    });
+    const endPointer = (event: PointerEvent) => {
+      this.activePointers.delete(event.pointerId);
+      this.lastPinchDistance = undefined;
+      this.dragging = this.activePointers.size > 0;
+    };
+    canvas.addEventListener("pointerup", endPointer);
+    canvas.addEventListener("pointercancel", endPointer);
     canvas.addEventListener("wheel", (event) => {
       event.preventDefault();
-      const next = THREE.MathUtils.clamp(this.zoom + Math.sign(event.deltaY) * 0.08, 1, 4);
-      this.setLayer(LAYERS[Math.round(next) - 1]);
+      if (this.activeLayer === "sky") {
+        this.targetFov = THREE.MathUtils.clamp(this.targetFov + Math.sign(event.deltaY) * 4, 28, 82);
+        return;
+      }
+      this.zoom = THREE.MathUtils.clamp(this.zoom + Math.sign(event.deltaY) * 0.08, 1, 4);
     }, { passive: false });
     window.addEventListener("resize", () => this.resize());
   }
@@ -243,13 +363,26 @@ export class SkyApp {
     const now = performance.now();
     const deltaSeconds = Math.min((now - this.lastFrame) / 1000, 0.05);
     this.lastFrame = now;
+    for (const material of this.starMaterials) {
+      material.uniforms.uTime.value = now / 1000;
+    }
     this.rotation.lerp(this.targetRotation, 0.08);
     const group = this.groups.get(this.activeLayer);
-    if (group) {
+    if (this.activeLayer === "sky") {
+      this.camera.position.set(0, 0.02, 0);
+      this.camera.rotation.order = "YXZ";
+      this.camera.rotation.y = this.rotation.x;
+      this.camera.rotation.x = this.rotation.y;
+      this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, this.targetFov, 0.08);
+      this.camera.updateProjectionMatrix();
+      if (group) {
+        group.rotation.set(0, 0, 0);
+      }
+    } else if (group) {
       group.rotation.y = this.rotation.x;
       group.rotation.x = this.rotation.y;
+      this.camera.position.z = THREE.MathUtils.lerp(this.camera.position.z, 1.7 + this.zoom * 0.7, 0.04);
     }
-    this.camera.position.z = THREE.MathUtils.lerp(this.camera.position.z, 1.7 + this.zoom * 0.7, 0.04);
     this.solarSystemLayer?.update(deltaSeconds);
     this.renderer.render(this.scene, this.camera);
     this.qualityController.sampleFrame();
