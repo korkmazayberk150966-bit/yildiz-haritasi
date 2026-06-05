@@ -4,6 +4,13 @@ import { CONSTELLATION_SEGMENTS, constellationSegmentToVectors } from "../astro/
 import { computeSolarSystemObjects } from "../astro/planets";
 import type { LayerId, ObservationTime, QualityProfile, ResolvedLocation } from "../types";
 import { loadSkyStars } from "./data";
+import {
+  createCosmicGalaxyLayer,
+  createDeepSkyBackground,
+  createMilkyWayExternalLayer,
+  createNebulaSprites,
+  DeepSpaceAssets
+} from "./deepSpaceLayers";
 import { AdaptiveQualityController, detectInitialQuality } from "./quality";
 import { createRoundPointMaterial } from "./roundPointMaterial";
 import { SolarSystemLayer } from "./SolarSystemLayer";
@@ -44,10 +51,16 @@ export class SkyApp {
   private lastPinchDistance?: number;
   private starMaterials: THREE.ShaderMaterial[] = [];
   private pointerDownAt?: THREE.Vector2;
+  private deepSpaceAssets = new DeepSpaceAssets();
+  private milkyWayMounted = false;
+  private cosmicMounted = false;
 
   constructor(private options: SkyAppOptions) {
     this.quality = detectInitialQuality();
     this.renderer = new THREE.WebGLRenderer({ antialias: this.quality.antialias, alpha: false, powerPreference: "high-performance" });
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 0.92;
     this.qualityController = new AdaptiveQualityController(this.quality, (profile) => this.applyQuality(profile));
     this.camera.position.set(0, 0.02, 0);
     this.renderer.setClearColor("#050712", 1);
@@ -61,8 +74,6 @@ export class SkyApp {
   async mount(): Promise<void> {
     this.options.onStatus("Gokyuzu hazirlaniyor...");
     await this.mountSkyLayer();
-    this.mountPointCloudLayer("milky-way", this.quality.gaiaPointLimit, "#8bb7ff", 120);
-    this.mountPointCloudLayer("cosmic-web", this.quality.cosmicPointLimit, "#a8f7ff", 420);
     this.setLayer("sky");
     this.animate();
     console.info(`[quality] ${this.quality.name} kalite profili ile hazir.`);
@@ -92,6 +103,10 @@ export class SkyApp {
     }
     if (layer === "solar-system") {
       void this.ensureSolarSystemLayer();
+    } else if (layer === "milky-way") {
+      void this.ensureMilkyWayLayer();
+    } else if (layer === "cosmic-web") {
+      void this.ensureCosmicLayer();
     }
   }
 
@@ -133,6 +148,7 @@ export class SkyApp {
     this.starMaterials.push(starMaterial);
     const starField = new THREE.Points(geometry, starMaterial);
     starField.scale.setScalar(SKY_RADIUS);
+    await this.addPhotographicSky(group);
     group.add(this.createAtmosphereDome());
     group.add(this.createGround());
     group.add(this.createMilkyWayBand());
@@ -148,6 +164,15 @@ export class SkyApp {
     group.add(this.createHorizon());
     this.addDirectionLabels(group);
     this.addSolarLabels(group);
+  }
+
+  private async addPhotographicSky(group: THREE.Group): Promise<void> {
+    try {
+      group.add(await createDeepSkyBackground(this.deepSpaceAssets, this.quality, this.options.observation, this.options.location));
+      group.add(await createNebulaSprites(this.deepSpaceAssets, this.options.observation, this.options.location));
+    } catch (error) {
+      console.warn("[deep-space] Photographic sky fallback active.", error);
+    }
   }
 
   private createHorizon(): THREE.Line {
@@ -286,6 +311,36 @@ export class SkyApp {
     group.add(this.solarSystemLayer.group);
     await this.solarSystemLayer.mount();
     this.options.onStatus("Gunes sistemi hazir");
+  }
+
+  private async ensureMilkyWayLayer(): Promise<void> {
+    if (this.milkyWayMounted) return;
+    this.milkyWayMounted = true;
+    const group = this.groups.get("milky-way")!;
+    this.options.onStatus("Samanyolu hazirlaniyor...");
+    try {
+      group.add(await createMilkyWayExternalLayer(this.deepSpaceAssets, this.quality));
+      group.add(this.createSpriteLabel("Samanyolu dis gorunumu temsilidir; Gunes ~8 kpc uzaklikta isaretlenir.", new THREE.Vector3(0, 0.62, 0), "#dbe7ff", 0.48));
+    } catch (error) {
+      console.warn("[deep-space] Milky Way atlas fallback active.", error);
+      this.mountPointCloudLayer("milky-way", this.quality.gaiaPointLimit, "#8bb7ff", 120);
+    }
+    this.options.onStatus("Samanyolu hazir");
+  }
+
+  private async ensureCosmicLayer(): Promise<void> {
+    if (this.cosmicMounted) return;
+    this.cosmicMounted = true;
+    const group = this.groups.get("cosmic-web")!;
+    this.options.onStatus("Evren katmani hazirlaniyor...");
+    try {
+      group.add(await createCosmicGalaxyLayer(this.deepSpaceAssets, this.quality));
+      group.add(this.createSpriteLabel("Galaksi dagilimi temsilidir; gercek katalog konumlari degildir.", new THREE.Vector3(0, 42, 0), "#dbe7ff", 18));
+    } catch (error) {
+      console.warn("[deep-space] Cosmic atlas fallback active.", error);
+      this.mountPointCloudLayer("cosmic-web", this.quality.cosmicPointLimit, "#a8f7ff", 420);
+    }
+    this.options.onStatus("Evren katmani hazir");
   }
 
   private mountPointCloudLayer(layer: LayerId, count: number, color: string, radius: number): void {

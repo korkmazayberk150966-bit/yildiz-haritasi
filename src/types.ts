@@ -36,6 +36,9 @@ export interface QualityProfile {
   gaiaPointLimit: number;
   cosmicPointLimit: number;
   antialias: boolean;
+  skyTextureTier: "4k" | "8k";
+  deepSpaceSpriteLimit: number;
+  useHeroSprites: boolean;
 }
 
 export interface RenderLayer {

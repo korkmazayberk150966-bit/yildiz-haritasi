@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "data:hyg": "tsx data/build-hyg.ts",
-    "data:planets": "tsx data/download-planet-textures.ts"
+    "data:planets": "tsx data/download-planet-textures.ts",
+    "data:deep-space": "tsx data/build-deep-space-assets.ts"
   },
   "dependencies": {
     "@turf/turf": "^7.2.0",
@@ -21,6 +22,7 @@
   "devDependencies": {
     "@types/node": "^22.15.29",
     "@types/three": "^0.177.0",
+    "sharp": "^0.34.5",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",

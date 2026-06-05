@@ -26,6 +26,23 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,bin,json,woff2}"],
+        globIgnores: ["**/textures/deep-space/**"],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.includes("/textures/deep-space/"),
+            handler: "CacheFirst",
+            options: {
+              cacheName: "deep-space-runtime-v1",
+              expiration: {
+                maxEntries: 8,
+                maxAgeSeconds: 60 * 60 * 24 * 14
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          }
+        ],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024
       }
     })

@@ -8,12 +8,42 @@ export function detectInitialQuality(): QualityProfile {
   const high = memory >= 8 && cores >= 8 && dpr <= 2;
 
   if (low) {
-    return { name: "low", pixelRatio: 1, starPointLimit: 4500, gaiaPointLimit: 30000, cosmicPointLimit: 12000, antialias: false };
+    return {
+      name: "low",
+      pixelRatio: 1,
+      starPointLimit: 4500,
+      gaiaPointLimit: 30000,
+      cosmicPointLimit: 12000,
+      antialias: false,
+      skyTextureTier: "4k",
+      deepSpaceSpriteLimit: 220,
+      useHeroSprites: true
+    };
   }
   if (high) {
-    return { name: "high", pixelRatio: Math.min(dpr, 2), starPointLimit: 12000, gaiaPointLimit: 180000, cosmicPointLimit: 80000, antialias: true };
+    return {
+      name: "high",
+      pixelRatio: Math.min(dpr, 2),
+      starPointLimit: 12000,
+      gaiaPointLimit: 180000,
+      cosmicPointLimit: 80000,
+      antialias: true,
+      skyTextureTier: "8k",
+      deepSpaceSpriteLimit: 900,
+      useHeroSprites: true
+    };
   }
-  return { name: "medium", pixelRatio: Math.min(dpr, 1.5), starPointLimit: 9000, gaiaPointLimit: 90000, cosmicPointLimit: 36000, antialias: true };
+  return {
+    name: "medium",
+    pixelRatio: Math.min(dpr, 1.5),
+    starPointLimit: 9000,
+    gaiaPointLimit: 90000,
+    cosmicPointLimit: 36000,
+    antialias: true,
+    skyTextureTier: "4k",
+    deepSpaceSpriteLimit: 520,
+    useHeroSprites: true
+  };
 }
 
 export class AdaptiveQualityController {
@@ -40,7 +70,10 @@ export class AdaptiveQualityController {
       starPointLimit: Math.min(this.profile.starPointLimit, 4500),
       gaiaPointLimit: Math.min(this.profile.gaiaPointLimit, 30000),
       cosmicPointLimit: Math.min(this.profile.cosmicPointLimit, 12000),
-      antialias: false
+      antialias: false,
+      skyTextureTier: "4k",
+      deepSpaceSpriteLimit: Math.min(this.profile.deepSpaceSpriteLimit, 220),
+      useHeroSprites: true
     };
     this.onChange(this.profile);
   }

@@ -8,6 +8,7 @@ Mobil oncelikli, statik ve offline calisan bir astronomi PWA'si. Kullanici dogum
 npm install
 npm run data:hyg
 npm run data:planets
+npm run data:deep-space
 npm run build
 ```
 
@@ -42,6 +43,16 @@ npm run data:planets
 ```
 
 Bu script JPL Solar System Simulator texture maps, NASA SVS Earth At Night ve NASA Visible Earth cloud map kaynaklarini `public/textures/planets/` altina indirir. Runtime'da NASA/JPL API veya uzak texture cagrisi yapilmaz.
+
+## Fotogercekci Deep-Space Asset Hatti
+
+Katman 1/3/4 icin NASA SVS Deep Star Maps 2020 ve NASA/Hubble atlaslarini uretmek:
+
+```bash
+npm run data:deep-space
+```
+
+Script ana kaynak olarak celestial/J2000 koordinatli, parlak Hipparcos/Tycho yildizlari ayrilmis `milkyway_2020_4k/8k.exr` dosyalarini hedefler. Bu yerel ortamda EXR decoder destegi yoksa otomatik olarak ayni SVS urununun `milkyway_2020_4k_print.jpg` fallback'inden optimize WebP uretir. Buyuk deep-space asset'leri PWA precache'e alinmaz; service worker bunlari runtime cache ile sinirli sure/sayida saklar.
 
 ## GitHub Pages
 

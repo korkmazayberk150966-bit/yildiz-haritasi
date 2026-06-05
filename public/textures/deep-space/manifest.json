@@ -1,0 +1,106 @@
+{
+  "skyMaps": {
+    "celestialNoBrightStars4k": "textures/deep-space/milkyway-celestial-4k.webp",
+    "celestialNoBrightStars8k": "textures/deep-space/milkyway-celestial-8k.webp"
+  },
+  "nebulaAtlas": {
+    "image": "textures/deep-space/nebula-atlas.webp",
+    "columns": 4,
+    "rows": 1,
+    "items": [
+      {
+        "key": "orion",
+        "title": "Orion Nebula",
+        "ra": 5.588,
+        "dec": -5.391,
+        "angularSizeDeg": 1.1,
+        "url": "https://images-assets.nasa.gov/image/PIA04227/PIA04227~medium.jpg"
+      },
+      {
+        "key": "crab",
+        "title": "Crab Nebula",
+        "ra": 5.576,
+        "dec": 22.014,
+        "angularSizeDeg": 0.12,
+        "url": "https://images-assets.nasa.gov/image/PIA03606/PIA03606~medium.jpg"
+      },
+      {
+        "key": "eagle",
+        "title": "Eagle Nebula / Pillars",
+        "ra": 18.314,
+        "dec": -13.817,
+        "angularSizeDeg": 0.45,
+        "url": "https://images-assets.nasa.gov/image/GSFC_20171208_Archive_e000842/GSFC_20171208_Archive_e000842~medium.jpg"
+      },
+      {
+        "key": "carina",
+        "title": "Carina Nebula",
+        "ra": 10.752,
+        "dec": -59.867,
+        "angularSizeDeg": 1.8,
+        "url": "https://images-assets.nasa.gov/image/GSFC_20171208_Archive_e002076/GSFC_20171208_Archive_e002076~medium.jpg"
+      }
+    ]
+  },
+  "galaxyAtlas": {
+    "image": "textures/deep-space/galaxy-atlas.webp",
+    "columns": 4,
+    "rows": 3,
+    "items": [
+      {
+        "key": "andromeda",
+        "title": "Andromeda Galaxy",
+        "hero": true,
+        "url": "https://images-assets.nasa.gov/image/GSFC_20171208_Archive_e000833/GSFC_20171208_Archive_e000833~small.jpg"
+      },
+      {
+        "key": "whirlpool",
+        "title": "Whirlpool Galaxy",
+        "hero": true,
+        "url": "https://images-assets.nasa.gov/image/PIA04230/PIA04230~small.jpg"
+      },
+      {
+        "key": "sombrero",
+        "title": "Sombrero Galaxy",
+        "hero": true,
+        "url": "https://images-assets.nasa.gov/image/PIA15226/PIA15226~medium.jpg"
+      },
+      {
+        "key": "spiral-1",
+        "title": "Hubble Spiral Galaxy",
+        "hero": false,
+        "url": "https://images-assets.nasa.gov/image/GSFC_20171208_Archive_e000158/GSFC_20171208_Archive_e000158~medium.jpg"
+      },
+      {
+        "key": "spiral-2",
+        "title": "Hubble Sunflower Galaxy",
+        "hero": false,
+        "url": "https://images-assets.nasa.gov/image/hubble-sees-a-galactic-sunflower_21136469209_o/hubble-sees-a-galactic-sunflower_21136469209_o~small.jpg"
+      },
+      {
+        "key": "elliptical-1",
+        "title": "Hubble Elliptical Galaxy",
+        "hero": false,
+        "url": "https://images-assets.nasa.gov/image/GSFC_20171208_Archive_e000504/GSFC_20171208_Archive_e000504~medium.jpg"
+      },
+      {
+        "key": "elliptical-2",
+        "title": "NGC 454",
+        "hero": false,
+        "url": "https://images-assets.nasa.gov/image/PIA10386/PIA10386~medium.jpg"
+      },
+      {
+        "key": "irregular-1",
+        "title": "Hubble Irregular Galaxy",
+        "hero": false,
+        "url": "https://images-assets.nasa.gov/image/GSFC_20171208_Archive_e000154/GSFC_20171208_Archive_e000154~small.jpg"
+      },
+      {
+        "key": "irregular-2",
+        "title": "Dwarf Galaxy",
+        "hero": false,
+        "url": "https://images-assets.nasa.gov/image/hubble-peers-at-a-distinctly-disorganized-dwarf-galaxy_25568403123_o/hubble-peers-at-a-distinctly-disorganized-dwarf-galaxy_25568403123_o~small.jpg"
+      }
+    ]
+  }
+}
