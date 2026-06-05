@@ -14,7 +14,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: radial-gradient(circle at 50% 0%, #18243d 0, #050712 44rem);
+  background: radial-gradient(circle at 50% 0%, #14213a 0, #050712 44rem);
 }
 
 button,
@@ -107,6 +107,12 @@ button {
   cursor: pointer;
 }
 
+button.compact {
+  min-height: 38px;
+  padding: 0 13px;
+  font-size: 0.82rem;
+}
+
 button.secondary {
   color: #dce9ff;
   background: #152138;
@@ -152,10 +158,74 @@ button.secondary {
 }
 
 .topbar p {
+  flex: 1;
   margin: 0;
   color: #d7e5ff;
   font-size: 0.82rem;
   text-shadow: 0 1px 8px #000;
+}
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 16px;
+  color: #dce9ff;
+  background: radial-gradient(circle at 50% 42%, rgba(35, 58, 98, 0.22), rgba(5, 7, 18, 0.55));
+  z-index: 4;
+  pointer-events: none;
+}
+
+.loading-overlay p {
+  margin: 0;
+  color: #b9c8e6;
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.loader-ring {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto;
+  border: 1px solid rgba(220, 233, 255, 0.2);
+  border-top-color: #dce9ff;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+.planet-card {
+  position: absolute;
+  top: 78px;
+  right: 14px;
+  width: min(280px, calc(100vw - 28px));
+  padding: 14px 16px;
+  border: 1px solid rgba(148, 178, 228, 0.22);
+  border-radius: 8px;
+  color: #dfeaff;
+  background: rgba(6, 11, 24, 0.76);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(18px);
+}
+
+.planet-card h2 {
+  margin: 2px 0 6px;
+  font-size: 1.18rem;
+}
+
+.planet-card p {
+  margin: 0;
+  color: #aebfde;
+  font-size: 0.88rem;
+}
+
+.planet-card .card-kicker {
+  color: #8fb7ff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
 }
 
 .layers {
@@ -184,6 +254,12 @@ button.secondary {
 .layers button.active {
   color: #07101f;
   background: #dce9ff;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 [hidden] {

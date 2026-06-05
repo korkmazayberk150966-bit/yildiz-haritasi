@@ -36,9 +36,9 @@ export function createStarMaterial(options: StarMaterialOptions = {}): THREE.Sha
         float brightness = clamp((6.8 - magnitude) / 6.8, 0.08, 1.0);
         float twinkle = uTwinkle == 1 ? 0.9 + 0.1 * sin(uTime * 2.4 + position.x * 0.037 + position.y * 0.021) : 1.0;
         vTwinkle = twinkle;
-        float attenuated = 320.0 / max(80.0, -mvPosition.z);
-        float rawSize = (2.0 + brightness * 7.0) * uPixelRatio * uSizeScale * attenuated;
-        gl_PointSize = clamp(rawSize, 1.0, 14.0 * uPixelRatio);
+        float attenuated = 190.0 / max(150.0, -mvPosition.z);
+        float rawSize = (0.85 + brightness * 2.55) * uPixelRatio * uSizeScale * attenuated;
+        gl_PointSize = clamp(rawSize, 0.75, 5.5 * uPixelRatio);
         gl_Position = projectionMatrix * mvPosition;
       }
     `,
@@ -87,7 +87,9 @@ export function createStarMaterial(options: StarMaterialOptions = {}): THREE.Sha
         vec2 uv = gl_PointCoord - vec2(0.5);
         float d = length(uv);
         if (d > 0.5) discard;
-        float alpha = smoothstep(0.5, 0.0, d);
+        float core = smoothstep(0.5, 0.08, d);
+        float halo = smoothstep(0.5, 0.0, d) * 0.25;
+        float alpha = clamp(core + halo, 0.0, 1.0);
         float brightness = pow(clamp((6.8 - vMagnitude) / 6.8, 0.08, 1.0), 1.4) * vTwinkle;
         vec3 color = kelvinToRgb(bvToKelvin(vBv));
         gl_FragColor = vec4(color * brightness, alpha * brightness * uOpacity);

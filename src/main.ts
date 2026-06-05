@@ -54,10 +54,16 @@ app.innerHTML = `
     </section>
     <section class="viewer" id="viewer" hidden>
       <div class="canvas-wrap" id="canvas-wrap"></div>
+      <div class="loading-overlay" id="loading-overlay" hidden>
+        <div class="loader-ring"></div>
+        <p>Gokyuzu hazirlaniyor</p>
+      </div>
       <div class="topbar">
         <button class="secondary" id="back">Yeni tarih</button>
         <p id="scene-status">Hazirlaniyor...</p>
+        <button class="secondary compact" id="reset-view" hidden>Tumunu sigdir</button>
       </div>
+      <aside class="planet-card" id="planet-card" hidden></aside>
       <nav class="layers" aria-label="Katmanlar">
         <button data-layer="sky" class="active">1 Gokyuzu</button>
         <button data-layer="solar-system">2 Sistem</button>
@@ -75,6 +81,9 @@ const intro = document.querySelector<HTMLElement>("#intro")!;
 const viewer = document.querySelector<HTMLElement>("#viewer")!;
 const canvasWrap = document.querySelector<HTMLElement>("#canvas-wrap")!;
 const cityList = document.querySelector<HTMLDataListElement>("#city-list")!;
+const resetView = document.querySelector<HTMLButtonElement>("#reset-view")!;
+const planetCard = document.querySelector<HTMLElement>("#planet-card")!;
+const loadingOverlay = document.querySelector<HTMLElement>("#loading-overlay")!;
 
 loadCities().catch((error) => {
   statusEl.textContent = error instanceof Error ? error.message : "Sehir verisi yuklenemedi.";
@@ -105,6 +114,11 @@ document.querySelector<HTMLButtonElement>("#back")!.addEventListener("click", ()
   skyApp = undefined;
   viewer.hidden = true;
   intro.hidden = false;
+});
+
+resetView.addEventListener("click", () => {
+  skyApp?.resetSolarSystemView();
+  planetCard.hidden = true;
 });
 
 form.city.addEventListener("change", () => {
@@ -141,6 +155,7 @@ document.querySelectorAll<HTMLButtonElement>("[data-layer]").forEach((button) =>
 async function startSky(input: BirthInput, location: ResolvedLocation): Promise<void> {
   if (!isWebGlAvailable()) throw new Error("WebGL desteklenmiyor; bu uygulama WebGL gerektirir.");
   statusEl.textContent = "Gokyuzu hesaplaniyor...";
+  loadingOverlay.hidden = false;
   intro.hidden = true;
   viewer.hidden = false;
   skyApp?.dispose();
@@ -155,10 +170,28 @@ async function startSky(input: BirthInput, location: ResolvedLocation): Promise<
       });
     },
     onStatus: (status) => {
-      sceneStatus.textContent = `${status} ${location.name} / ${location.timezone}`;
+      sceneStatus.textContent = `${status} · ${location.name} · ${location.timezone}`;
+      loadingOverlay.hidden = status === "Hazir" || status.endsWith("hazir");
+    },
+    onSolarSystemReady: (ready) => {
+      resetView.hidden = !ready;
+      if (!ready) planetCard.hidden = true;
+    },
+    onPlanetInfo: (info) => {
+      if (!info) {
+        planetCard.hidden = true;
+        return;
+      }
+      planetCard.innerHTML = `
+        <p class="card-kicker">Gezegen odagi</p>
+        <h2>${info.name}</h2>
+        <p>Gunes'e uzaklik: ${info.distanceAu.toFixed(2)} AU</p>
+      `;
+      planetCard.hidden = false;
     }
   });
   await skyApp.mount();
+  loadingOverlay.hidden = true;
 }
 
 async function loadCities(): Promise<void> {

@@ -5,6 +5,7 @@ import { computeSolarSystemObjects } from "../astro/planets";
 import type { LayerId, ObservationTime, QualityProfile, ResolvedLocation } from "../types";
 import { loadSkyStars } from "./data";
 import { AdaptiveQualityController, detectInitialQuality } from "./quality";
+import { createRoundPointMaterial } from "./roundPointMaterial";
 import { SolarSystemLayer } from "./SolarSystemLayer";
 import { createStarMaterial } from "./starMaterial";
 
@@ -14,6 +15,8 @@ interface SkyAppOptions {
   observation: ObservationTime;
   onLayerChange: (layer: LayerId) => void;
   onStatus: (status: string) => void;
+  onSolarSystemReady?: (ready: boolean) => void;
+  onPlanetInfo?: (info: { name: string; distanceAu: number } | null) => void;
 }
 
 const LAYERS: LayerId[] = ["sky", "solar-system", "milky-way", "cosmic-web"];
@@ -40,6 +43,7 @@ export class SkyApp {
   private activePointers = new Map<number, THREE.Vector2>();
   private lastPinchDistance?: number;
   private starMaterials: THREE.ShaderMaterial[] = [];
+  private pointerDownAt?: THREE.Vector2;
 
   constructor(private options: SkyAppOptions) {
     this.quality = detectInitialQuality();
@@ -55,13 +59,14 @@ export class SkyApp {
   }
 
   async mount(): Promise<void> {
-    this.options.onStatus("Yildiz verisi yukleniyor...");
+    this.options.onStatus("Gokyuzu hazirlaniyor...");
     await this.mountSkyLayer();
     this.mountPointCloudLayer("milky-way", this.quality.gaiaPointLimit, "#8bb7ff", 120);
     this.mountPointCloudLayer("cosmic-web", this.quality.cosmicPointLimit, "#a8f7ff", 420);
     this.setLayer("sky");
     this.animate();
-    this.options.onStatus(`${this.quality.name} kalite profili ile hazir.`);
+    console.info(`[quality] ${this.quality.name} kalite profili ile hazir.`);
+    this.options.onStatus("Hazir");
   }
 
   setLayer(layer: LayerId): void {
@@ -70,9 +75,17 @@ export class SkyApp {
     this.zoom = LAYERS.indexOf(layer) + 1;
     this.options.onLayerChange(layer);
     if (layer === "sky") {
+      this.options.onSolarSystemReady?.(false);
+      this.options.onPlanetInfo?.(null);
       this.camera.position.set(0, 0.02, 0);
       this.targetFov = THREE.MathUtils.clamp(this.targetFov, 38, 78);
+    } else if (layer === "solar-system") {
+      this.options.onSolarSystemReady?.(true);
+      this.options.onPlanetInfo?.(null);
+      this.resetSolarSystemView();
     } else {
+      this.options.onSolarSystemReady?.(false);
+      this.options.onPlanetInfo?.(null);
       this.camera.position.set(0, 0, 2.25);
       this.camera.fov = 65;
       this.camera.updateProjectionMatrix();
@@ -125,7 +138,7 @@ export class SkyApp {
     group.add(this.createMilkyWayBand());
     group.add(starField);
     if (this.quality.name !== "low") {
-      const glowMaterial = createStarMaterial({ sizeScale: 2.4, opacity: 0.18 });
+      const glowMaterial = createStarMaterial({ sizeScale: 1.75, opacity: 0.07 });
       this.starMaterials.push(glowMaterial);
       const glow = new THREE.Points(geometry, glowMaterial);
       glow.scale.setScalar(SKY_RADIUS);
@@ -250,13 +263,17 @@ export class SkyApp {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    const material = new THREE.PointsMaterial({
-      size: this.quality.name === "low" ? 0.38 : 0.58,
-      vertexColors: true,
-      transparent: true,
-      opacity: this.quality.name === "low" ? 0.12 : 0.2,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false
+    const sizes = new Float32Array(count);
+    const intensities = new Float32Array(count);
+    for (let i = 0; i < count; i += 1) {
+      sizes[i] = 0.55 + Math.random() * 1.4;
+      intensities[i] = 0.28 + Math.random() * 0.42;
+    }
+    geometry.setAttribute("pointSize", new THREE.BufferAttribute(sizes, 1));
+    geometry.setAttribute("intensity", new THREE.BufferAttribute(intensities, 1));
+    const material = createRoundPointMaterial({
+      opacity: this.quality.name === "low" ? 0.16 : 0.24,
+      maxPointSize: this.quality.name === "low" ? 2.4 : 3.4
     });
     return new THREE.Points(geometry, material);
   }
@@ -264,26 +281,42 @@ export class SkyApp {
   private async ensureSolarSystemLayer(): Promise<void> {
     const group = this.groups.get("solar-system")!;
     if (this.solarSystemLayer) return;
-    this.options.onStatus("Gezegen dokulari tembel yukleniyor...");
+    this.options.onStatus("Gunes sistemi hazirlaniyor...");
     this.solarSystemLayer = new SolarSystemLayer(this.options.observation, this.quality);
     group.add(this.solarSystemLayer.group);
     await this.solarSystemLayer.mount();
-    this.options.onStatus("Gercekci gezegen render'i hazir.");
+    this.options.onStatus("Gunes sistemi hazir");
   }
 
   private mountPointCloudLayer(layer: LayerId, count: number, color: string, radius: number): void {
     const group = this.groups.get(layer)!;
     const safeCount = Math.max(1000, count);
     const positions = new Float32Array(safeCount * 3);
+    const colors = new Float32Array(safeCount * 3);
+    const sizes = new Float32Array(safeCount);
+    const intensities = new Float32Array(safeCount);
     for (let i = 0; i < safeCount; i += 1) {
       const r = radius * Math.cbrt(Math.random());
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
       positions.set([r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi) * 0.12, r * Math.sin(phi) * Math.sin(theta)], i * 3);
+      const depth = 1 - r / radius;
+      const base = new THREE.Color(color);
+      const tint = layer === "cosmic-web" ? new THREE.Color("#d7fbff") : new THREE.Color("#eef4ff");
+      base.lerp(tint, Math.random() * 0.35);
+      colors.set([base.r, base.g, base.b], i * 3);
+      sizes[i] = (layer === "milky-way" ? 0.55 : 1.05) + Math.random() * (layer === "milky-way" ? 1.6 : 2.8);
+      intensities[i] = 0.22 + depth * 0.45 + Math.random() * 0.28;
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    const material = new THREE.PointsMaterial({ color, size: layer === "milky-way" ? 0.18 : 0.7, transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending });
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute("pointSize", new THREE.BufferAttribute(sizes, 1));
+    geometry.setAttribute("intensity", new THREE.BufferAttribute(intensities, 1));
+    const material = createRoundPointMaterial({
+      opacity: layer === "milky-way" ? 0.5 : 0.62,
+      maxPointSize: layer === "milky-way" ? 4.2 : 6.5
+    });
     group.add(new THREE.Points(geometry, material));
     const text = layer === "milky-way"
       ? "Samanyolu: Gunes'in galaktik konumu insan omrunde anlamli degismez."
@@ -313,6 +346,7 @@ export class SkyApp {
     canvas.addEventListener("pointerdown", (event) => {
       this.dragging = true;
       this.lastPointer.set(event.clientX, event.clientY);
+      this.pointerDownAt = new THREE.Vector2(event.clientX, event.clientY);
       this.activePointers.set(event.pointerId, new THREE.Vector2(event.clientX, event.clientY));
       canvas.setPointerCapture(event.pointerId);
     });
@@ -335,6 +369,13 @@ export class SkyApp {
       this.lastPointer.set(event.clientX, event.clientY);
     });
     const endPointer = (event: PointerEvent) => {
+      if (this.activeLayer === "solar-system" && this.pointerDownAt) {
+        const up = new THREE.Vector2(event.clientX, event.clientY);
+        if (up.distanceTo(this.pointerDownAt) < 8) {
+          const info = this.solarSystemLayer?.focusFromScreenPoint(up, this.camera, this.renderer.domElement);
+          if (info) this.options.onPlanetInfo?.(info);
+        }
+      }
       this.activePointers.delete(event.pointerId);
       this.lastPinchDistance = undefined;
       this.dragging = this.activePointers.size > 0;
@@ -354,8 +395,17 @@ export class SkyApp {
 
   private applyQuality(profile: QualityProfile): void {
     this.renderer.setPixelRatio(profile.pixelRatio);
-    this.options.onStatus(`Performans icin ${profile.name} kalite profiline gecildi.`);
+    console.info(`[quality] Performans icin ${profile.name} kalite profiline gecildi.`);
     this.resize();
+  }
+
+  resetSolarSystemView(): void {
+    this.solarSystemLayer?.resetFocus();
+    this.options.onPlanetInfo?.(null);
+    this.camera.position.set(0, 3.4, 5.8);
+    this.camera.fov = 56;
+    this.camera.lookAt(0, 0, 0);
+    this.camera.updateProjectionMatrix();
   }
 
   private animate = (): void => {
@@ -378,6 +428,8 @@ export class SkyApp {
       if (group) {
         group.rotation.set(0, 0, 0);
       }
+    } else if (this.activeLayer === "solar-system" && this.solarSystemLayer) {
+      this.solarSystemLayer.updateCamera(this.camera, deltaSeconds);
     } else if (group) {
       group.rotation.y = this.rotation.x;
       group.rotation.x = this.rotation.y;
