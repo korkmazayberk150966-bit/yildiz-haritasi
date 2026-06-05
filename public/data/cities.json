@@ -1,0 +1,14 @@
+[
+  { "name": "Istanbul", "country": "TR", "lat": 41.0082, "lon": 28.9784 },
+  { "name": "Ankara", "country": "TR", "lat": 39.9334, "lon": 32.8597 },
+  { "name": "Izmir", "country": "TR", "lat": 38.4237, "lon": 27.1428 },
+  { "name": "Bursa", "country": "TR", "lat": 40.1828, "lon": 29.0663 },
+  { "name": "Antalya", "country": "TR", "lat": 36.8969, "lon": 30.7133 },
+  { "name": "Adana", "country": "TR", "lat": 37.0, "lon": 35.3213 },
+  { "name": "Trabzon", "country": "TR", "lat": 41.0027, "lon": 39.7168 },
+  { "name": "London", "country": "GB", "lat": 51.5072, "lon": -0.1276 },
+  { "name": "Berlin", "country": "DE", "lat": 52.52, "lon": 13.405 },
+  { "name": "Paris", "country": "FR", "lat": 48.8566, "lon": 2.3522 },
+  { "name": "New York", "country": "US", "lat": 40.7128, "lon": -74.006 },
+  { "name": "Tokyo", "country": "JP", "lat": 35.6762, "lon": 139.6503 }
+]

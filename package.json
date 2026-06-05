@@ -1,0 +1,29 @@
+{
+  "name": "yildiz-haritasi",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "data:hyg": "tsx data/build-hyg.ts",
+    "data:planets": "tsx data/download-planet-textures.ts"
+  },
+  "dependencies": {
+    "@turf/turf": "^7.2.0",
+    "astronomy-engine": "^2.1.19",
+    "three": "^0.177.0",
+    "tz-lookup": "^6.1.25",
+    "vite-plugin-pwa": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "@types/three": "^0.177.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.1"
+  }
+}
