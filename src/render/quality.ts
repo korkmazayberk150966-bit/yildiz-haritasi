@@ -11,7 +11,7 @@ export function detectInitialQuality(): QualityProfile {
     return {
       name: "low",
       pixelRatio: 1,
-      starPointLimit: 4500,
+      starPointLimit: 6000,
       gaiaPointLimit: 30000,
       cosmicPointLimit: 12000,
       antialias: false,
@@ -24,7 +24,7 @@ export function detectInitialQuality(): QualityProfile {
     return {
       name: "high",
       pixelRatio: Math.min(dpr, 2),
-      starPointLimit: 12000,
+      starPointLimit: 16000,
       gaiaPointLimit: 180000,
       cosmicPointLimit: 80000,
       antialias: true,
@@ -36,7 +36,7 @@ export function detectInitialQuality(): QualityProfile {
   return {
     name: "medium",
     pixelRatio: Math.min(dpr, 1.5),
-    starPointLimit: 9000,
+    starPointLimit: 11000,
     gaiaPointLimit: 90000,
     cosmicPointLimit: 36000,
     antialias: true,
@@ -67,7 +67,7 @@ export class AdaptiveQualityController {
     this.profile = {
       name: "low",
       pixelRatio: 1,
-      starPointLimit: Math.min(this.profile.starPointLimit, 4500),
+      starPointLimit: Math.min(this.profile.starPointLimit, 6000),
       gaiaPointLimit: Math.min(this.profile.gaiaPointLimit, 30000),
       cosmicPointLimit: Math.min(this.profile.cosmicPointLimit, 12000),
       antialias: false,

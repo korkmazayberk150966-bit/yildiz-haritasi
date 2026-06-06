@@ -7,14 +7,18 @@ import { loadSkyStars } from "./data";
 import {
   createCosmicGalaxyLayer,
   createDeepSkyBackground,
-  createMilkyWayExternalLayer,
-  createNebulaSprites,
+  createMilkyWayInteriorLayer,
+  createVolumetricNebulaGroup,
   DeepSpaceAssets
 } from "./deepSpaceLayers";
 import { AdaptiveQualityController, detectInitialQuality } from "./quality";
 import { createRoundPointMaterial } from "./roundPointMaterial";
+import type { PlanetInfo } from "./SolarSystemLayer";
 import { SolarSystemLayer } from "./SolarSystemLayer";
 import { createStarMaterial } from "./starMaterial";
+
+// Lazy-load postprocessing (bloom) — ilk pakete girmesin
+type Composer = { render(): void; setSize(w: number, h: number): void };
 
 interface SkyAppOptions {
   container: HTMLElement;
@@ -23,7 +27,7 @@ interface SkyAppOptions {
   onLayerChange: (layer: LayerId) => void;
   onStatus: (status: string) => void;
   onSolarSystemReady?: (ready: boolean) => void;
-  onPlanetInfo?: (info: { name: string; distanceAu: number } | null) => void;
+  onPlanetInfo: (info: any | null) => void;
 }
 
 const LAYERS: LayerId[] = ["sky", "solar-system", "milky-way", "cosmic-web"];
@@ -51,16 +55,27 @@ export class SkyApp {
   private lastPinchDistance?: number;
   private starMaterials: THREE.ShaderMaterial[] = [];
   private pointerDownAt?: THREE.Vector2;
+  private interactiveSkyGroup = new THREE.Group();
+  private brightStars: any[] = [];
+  private constellationsInfo: any[] = [];
+  private raycaster = new THREE.Raycaster();
   private deepSpaceAssets = new DeepSpaceAssets();
   private milkyWayMounted = false;
   private cosmicMounted = false;
+  private composer?: Composer;
+  private driftAngle = 0; // kamera sürüklenme açısı
 
   constructor(private options: SkyAppOptions) {
     this.quality = detectInitialQuality();
-    this.renderer = new THREE.WebGLRenderer({ antialias: this.quality.antialias, alpha: false, powerPreference: "high-performance" });
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: this.quality.antialias,
+      alpha: false,
+      powerPreference: "high-performance",
+      logarithmicDepthBuffer: true   // Yakın/uzak z-çakışmasını önler
+    });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.92;
+    this.renderer.toneMappingExposure = 0.88;
     this.qualityController = new AdaptiveQualityController(this.quality, (profile) => this.applyQuality(profile));
     this.camera.position.set(0, 0.02, 0);
     this.renderer.setClearColor("#050712", 1);
@@ -72,12 +87,14 @@ export class SkyApp {
   }
 
   async mount(): Promise<void> {
-    this.options.onStatus("Gokyuzu hazirlaniyor...");
+    this.options.onStatus("Gökyüzü hazırlanıyor...");
     await this.mountSkyLayer();
     this.setLayer("sky");
     this.animate();
-    console.info(`[quality] ${this.quality.name} kalite profili ile hazir.`);
-    this.options.onStatus("Hazir");
+    this.options.onStatus("Hazır");
+
+    // Bloom'u arka planda yükle (initial pakete girmesin)
+    void this.setupBloom();
   }
 
   setLayer(layer: LayerId): void {
@@ -85,27 +102,34 @@ export class SkyApp {
     for (const [id, group] of this.groups) group.visible = id === layer;
     this.zoom = LAYERS.indexOf(layer) + 1;
     this.options.onLayerChange(layer);
+
     if (layer === "sky") {
+      this.options.onStatus("Gökyüzü hazır");
       this.options.onSolarSystemReady?.(false);
       this.options.onPlanetInfo?.(null);
       this.camera.position.set(0, 0.02, 0);
       this.targetFov = THREE.MathUtils.clamp(this.targetFov, 38, 78);
+      this.solarSystemLayer?.disableControls();
     } else if (layer === "solar-system") {
+      this.options.onStatus("Güneş sistemi hazır");
       this.options.onSolarSystemReady?.(true);
       this.options.onPlanetInfo?.(null);
-      this.resetSolarSystemView();
+      this.solarSystemLayer?.disableControls(); // mount sonrası etkinleşecek
+      void this.ensureSolarSystemLayer();
     } else {
       this.options.onSolarSystemReady?.(false);
       this.options.onPlanetInfo?.(null);
       this.camera.position.set(0, 0, 2.25);
       this.camera.fov = 65;
       this.camera.updateProjectionMatrix();
+      this.solarSystemLayer?.disableControls();
     }
-    if (layer === "solar-system") {
-      void this.ensureSolarSystemLayer();
-    } else if (layer === "milky-way") {
+
+    if (layer === "milky-way") {
+      this.options.onStatus("Samanyolu hazır");
       void this.ensureMilkyWayLayer();
     } else if (layer === "cosmic-web") {
+      this.options.onStatus("Evren hazır");
       void this.ensureCosmicLayer();
     }
   }
@@ -115,13 +139,17 @@ export class SkyApp {
     this.camera.aspect = clientWidth / Math.max(clientHeight, 1);
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(clientWidth, clientHeight, false);
+    this.composer?.setSize(clientWidth, clientHeight);
   }
 
   dispose(): void {
     cancelAnimationFrame(this.animation);
+    this.solarSystemLayer?.dispose();
     this.renderer.dispose();
     this.options.container.replaceChildren();
   }
+
+  // ─── Katman grupları ──────────────────────────────────────────────────────
 
   private createLayerGroups(): void {
     for (const layer of LAYERS) {
@@ -142,24 +170,55 @@ export class SkyApp {
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(stars.positions, 3));
-    geometry.setAttribute("magnitude", new THREE.BufferAttribute(stars.meta.filter((_, index) => index % 2 === 0), 1));
-    geometry.setAttribute("bv", new THREE.BufferAttribute(stars.meta.filter((_, index) => index % 2 === 1), 1));
+    geometry.setAttribute("magnitude", new THREE.BufferAttribute(stars.meta.filter((_, i) => i % 2 === 0), 1));
+    geometry.setAttribute("bv", new THREE.BufferAttribute(stars.meta.filter((_, i) => i % 2 === 1), 1));
+
+    // Yıldızları biraz farklı mesafelerde yerleştir (hafif derinlik)
+    // Yüksek kalitede daha fazla varyasyon
+    if (this.quality.name !== "low") {
+      const pos = stars.positions;
+      for (let i = 0; i < pos.length / 3; i++) {
+        const jitter = 0.93 + Math.random() * 0.14;
+        pos[i * 3]     *= jitter;
+        pos[i * 3 + 1] *= jitter;
+        pos[i * 3 + 2] *= jitter;
+      }
+    }
+
     const starMaterial = createStarMaterial({ twinkle: this.quality.name === "high" });
     this.starMaterials.push(starMaterial);
     const starField = new THREE.Points(geometry, starMaterial);
     starField.scale.setScalar(SKY_RADIUS);
+
     await this.addPhotographicSky(group);
     group.add(this.createAtmosphereDome());
-    group.add(this.createGround());
     group.add(this.createMilkyWayBand());
     group.add(starField);
+
+    // Interactive sky group (yıldız hitbox'ları vb. için)
+    group.add(this.interactiveSkyGroup);
+
+    // Load extra info
+    try {
+      const [starsRes, constsRes] = await Promise.all([
+        fetch(`${import.meta.env.BASE_URL}data/bright_stars.json`),
+        fetch(`${import.meta.env.BASE_URL}data/constellations_info.json`)
+      ]);
+      if (starsRes.ok) this.brightStars = await starsRes.json();
+      if (constsRes.ok) this.constellationsInfo = await constsRes.json();
+      this.createSkyHitboxes();
+    } catch (err) {
+      console.warn("Sky info load failed", err);
+    }
+
     if (this.quality.name !== "low") {
-      const glowMaterial = createStarMaterial({ sizeScale: 1.75, opacity: 0.07 });
+      const glowMaterial = createStarMaterial({ sizeScale: 2.0, opacity: 0.055 });
       this.starMaterials.push(glowMaterial);
       const glow = new THREE.Points(geometry, glowMaterial);
       glow.scale.setScalar(SKY_RADIUS);
       group.add(glow);
     }
+
     group.add(this.createConstellations());
     group.add(this.createHorizon());
     this.addDirectionLabels(group);
@@ -169,35 +228,150 @@ export class SkyApp {
   private async addPhotographicSky(group: THREE.Group): Promise<void> {
     try {
       group.add(await createDeepSkyBackground(this.deepSpaceAssets, this.quality, this.options.observation, this.options.location));
-      group.add(await createNebulaSprites(this.deepSpaceAssets, this.options.observation, this.options.location));
+      group.add(await createVolumetricNebulaGroup(this.deepSpaceAssets, this.quality, this.options.observation, this.options.location));
     } catch (error) {
       console.warn("[deep-space] Photographic sky fallback active.", error);
     }
   }
 
+  private async ensureSolarSystemLayer(): Promise<void> {
+    if (!this.solarSystemLayer) {
+      const group = this.groups.get("solar-system")!;
+      this.options.onStatus("Güneş sistemi hazırlanıyor...");
+      this.solarSystemLayer = new SolarSystemLayer(this.options.observation, this.quality);
+      group.add(this.solarSystemLayer.group);
+      await this.solarSystemLayer.mount(this.camera, this.renderer.domElement);
+      this.options.onStatus("Güneş sistemi hazır");
+    }
+    this.camera.fov = 56;
+    this.camera.updateProjectionMatrix();
+    this.solarSystemLayer.resetFocus();
+  }
+
+  private async ensureMilkyWayLayer(): Promise<void> {
+    if (this.milkyWayMounted) return;
+    this.milkyWayMounted = true;
+    const group = this.groups.get("milky-way")!;
+    this.options.onStatus("Samanyolu hazırlanıyor...");
+    try {
+      group.add(createMilkyWayInteriorLayer(this.quality));
+      group.add(this.createSpriteLabel(
+        "Samanyolu içi temsili görünüm — Güneş, galaktik merkezden ~26.000 ışık yılı uzaktadır.",
+        new THREE.Vector3(0, 0.68, 0), "#dbe7ff", 0.52
+      ));
+    } catch (error) {
+      console.warn("[deep-space] Milky Way fallback active.", error);
+      this.mountPointCloudLayer("milky-way", this.quality.gaiaPointLimit, "#8bb7ff", 120);
+    }
+    this.options.onStatus("Samanyolu hazır");
+  }
+
+  private async ensureCosmicLayer(): Promise<void> {
+    if (this.cosmicMounted) return;
+    this.cosmicMounted = true;
+    const group = this.groups.get("cosmic-web")!;
+    this.options.onStatus("Evren katmanı hazırlanıyor...");
+    try {
+      group.add(createCosmicGalaxyLayer(this.quality));
+      group.add(this.createSpriteLabel(
+        "Galaksi dağılımı temsilidir — gözlemsel evrenin küçük bir kesiti.",
+        new THREE.Vector3(0, 42, 0), "#dbe7ff", 18
+      ));
+    } catch (error) {
+      console.warn("[deep-space] Cosmic fallback active.", error);
+      this.mountPointCloudLayer("cosmic-web", this.quality.cosmicPointLimit, "#a8f7ff", 420);
+    }
+    this.options.onStatus("Evren katmanı hazır");
+  }
+
+  // ─── Bloom lazy-load ──────────────────────────────────────────────────────
+
+  private async setupBloom(): Promise<void> {
+    if (this.quality.name === "low") return;
+    try {
+      const [
+        { EffectComposer },
+        { RenderPass },
+        { UnrealBloomPass }
+      ] = await Promise.all([
+        import("three/examples/jsm/postprocessing/EffectComposer.js"),
+        import("three/examples/jsm/postprocessing/RenderPass.js"),
+        import("three/examples/jsm/postprocessing/UnrealBloomPass.js")
+      ]);
+      const { clientWidth, clientHeight } = this.options.container;
+      const composer = new EffectComposer(this.renderer);
+      composer.addPass(new RenderPass(this.scene, this.camera));
+      // A maddesi: ölçülü bloom — sadece en parlak noktalar (yıldız çekirdekleri, Güneş)
+      // Threshold yüksek → galaksi parçacıkları beyaza doymuyor
+      const bloom = new UnrealBloomPass(
+        new THREE.Vector2(clientWidth, clientHeight),
+        this.quality.name === "high" ? 0.18 : 0.12,  // strength — belirgin azaltıldı
+        0.35,   // radius — küçük halo, lens artefaktı yok
+        0.90    // threshold — yalnızca çok parlak çekirdekler
+      );
+      composer.addPass(bloom);
+      this.composer = composer;
+    } catch {
+      // Bloom yüklenemezse sessizce devam et
+    }
+  }
+
+  // ─── Gökyüzü bileşenleri ─────────────────────────────────────────────────
+
   private createHorizon(): THREE.Line {
     const points: THREE.Vector3[] = [];
-    for (let i = 0; i <= 128; i += 1) {
+    for (let i = 0; i <= 128; i++) {
       const angle = (i / 128) * Math.PI * 2;
       points.push(new THREE.Vector3(Math.sin(angle) * HORIZON_RADIUS, 0, Math.cos(angle) * HORIZON_RADIUS));
     }
-    const material = new THREE.LineBasicMaterial({ color: "#4d6a96", transparent: true, opacity: 0.75 });
-    return new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material);
+    return new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(points),
+      new THREE.LineBasicMaterial({ color: "#4d6a96", transparent: true, opacity: 0.75 })
+    );
   }
 
-  private createConstellations(): THREE.LineSegments {
-    const positions = new Float32Array(CONSTELLATION_SEGMENTS.length * 2 * 3);
-    CONSTELLATION_SEGMENTS.forEach((segment, index) => {
-      const [from, to] = constellationSegmentToVectors(segment, this.options.observation.utcDate, this.options.location);
-      positions.set(from.map((value) => value * SKY_RADIUS), index * 6);
-      positions.set(to.map((value) => value * SKY_RADIUS), index * 6 + 3);
+  private createSkyHitboxes(): void {
+    const starMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+    for (const star of this.brightStars) {
+      const seg = { name: "", from: [star.ra, star.dec], to: [star.ra, star.dec] } as any;
+      const pos = constellationSegmentToVectors(seg, this.options.observation.utcDate, this.options.location)[0];
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(2.0, 8, 8), starMat);
+      mesh.position.set(pos[0] * SKY_RADIUS * 0.95, pos[1] * SKY_RADIUS * 0.95, pos[2] * SKY_RADIUS * 0.95);
+      mesh.userData = { type: "star", info: star };
+      this.interactiveSkyGroup.add(mesh);
+    }
+  }
+
+  private createConstellations(): THREE.Group {
+    const group = new THREE.Group();
+    const map = new Map<string, typeof CONSTELLATION_SEGMENTS>();
+    CONSTELLATION_SEGMENTS.forEach(s => {
+      if (!map.has(s.name)) map.set(s.name, []);
+      map.get(s.name)!.push(s);
     });
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    return new THREE.LineSegments(
-      geometry,
-      new THREE.LineBasicMaterial({ color: "#6d88b8", transparent: true, opacity: 0.22, depthWrite: false })
-    );
+    
+    for (const [name, segments] of map.entries()) {
+      const positions = new Float32Array(segments.length * 2 * 3);
+      segments.forEach((segment, index) => {
+        const [from, to] = constellationSegmentToVectors(segment, this.options.observation.utcDate, this.options.location);
+        positions.set(from.map((v) => v * SKY_RADIUS), index * 6);
+        positions.set(to.map((v) => v * SKY_RADIUS), index * 6 + 3);
+      });
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      const material = new THREE.LineBasicMaterial({ color: "#5c7aaa", transparent: true, opacity: 0.18, depthWrite: false });
+      const line = new THREE.LineSegments(geometry, material);
+      line.userData = { type: "constellation", info: this.constellationsInfo.find(c => c.name === name) };
+      // hit test için raycast threshold
+      (line as any).raycast = function(raycaster: THREE.Raycaster, intersects: any[]) {
+        const oldThresh = raycaster.params.Line.threshold;
+        raycaster.params.Line.threshold = 4.0;
+        THREE.LineSegments.prototype.raycast.call(this, raycaster, intersects);
+        raycaster.params.Line.threshold = oldThresh;
+      };
+      group.add(line);
+    }
+    return group;
   }
 
   private addDirectionLabels(group: THREE.Group): void {
@@ -207,11 +381,14 @@ export class SkyApp {
       ["G", 0, 2.4, -HORIZON_RADIUS],
       ["B", -HORIZON_RADIUS, 2.4, 0]
     ];
-    labels.forEach(([text, x, y, z]) => group.add(this.createSpriteLabel(text, new THREE.Vector3(x, y, z), "#9fb9e8", 7)));
+    labels.forEach(([text, x, y, z]) =>
+      group.add(this.createSpriteLabel(text, new THREE.Vector3(x, y, z), "#9fb9e8", 7))
+    );
   }
 
   private addSolarLabels(group: THREE.Group): void {
-    const objects = computeSolarSystemObjects(this.options.observation.utcDate, this.options.location).filter((object) => object.altitude > -10);
+    const objects = computeSolarSystemObjects(this.options.observation.utcDate, this.options.location)
+      .filter((o) => o.altitude > -10);
     objects.forEach((object) => {
       const alt = THREE.MathUtils.degToRad(object.altitude);
       const az = THREE.MathUtils.degToRad(object.azimuth);
@@ -234,113 +411,62 @@ export class SkyApp {
     const material = new THREE.ShaderMaterial({
       side: THREE.BackSide,
       depthWrite: false,
-      uniforms: {
-        uHorizonGlow: { value: this.quality.name === "low" ? 0.18 : 0.32 }
-      },
+      uniforms: { uHorizonGlow: { value: this.quality.name === "low" ? 0.18 : 0.32 } },
       vertexShader: `
         varying vec3 vWorld;
-
         void main() {
-          vec4 world = modelMatrix * vec4(position, 1.0);
-          vWorld = normalize(world.xyz);
+          vWorld = normalize((modelMatrix * vec4(position, 1.0)).xyz);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
       fragmentShader: `
-        precision highp float;
-        uniform float uHorizonGlow;
         varying vec3 vWorld;
-
+        uniform float uHorizonGlow;
         void main() {
-          float horizon = pow(1.0 - clamp(vWorld.y, 0.0, 1.0), 2.2);
-          vec3 zenith = vec3(0.015, 0.027, 0.075);
-          vec3 lowSky = vec3(0.08, 0.13, 0.22) * uHorizonGlow;
-          gl_FragColor = vec4(mix(zenith, lowSky, horizon), 1.0);
+          float y = vWorld.y;
+          float horizon = pow(1.0 - abs(y), 2.5);
+          vec3 deepSky = vec3(0.02, 0.03, 0.06);
+          vec3 horizonGlowColor = vec3(0.05, 0.08, 0.16) * uHorizonGlow;
+          gl_FragColor = vec4(mix(deepSky, horizonGlowColor, horizon), 1.0);
         }
-      `
+      `,
     });
     return new THREE.Mesh(new THREE.SphereGeometry(SKY_RADIUS * 0.995, 32, 16), material);
   }
 
-  private createGround(): THREE.Mesh {
-    const geometry = new THREE.CircleGeometry(HORIZON_RADIUS * 1.4, 96);
-    const material = new THREE.MeshBasicMaterial({ color: "#02040a", transparent: true, opacity: 0.86, depthWrite: true });
-    const ground = new THREE.Mesh(geometry, material);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.04;
-    return ground;
-  }
 
   private createMilkyWayBand(): THREE.Points {
-    const count = this.quality.name === "low" ? 550 : this.quality.name === "medium" ? 1200 : 2200;
+    const count = this.quality.name === "low" ? 900 : this.quality.name === "medium" ? 2400 : 4500;
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
-    const tilt = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(THREE.MathUtils.degToRad(62), 0, THREE.MathUtils.degToRad(28)));
-    for (let i = 0; i < count; i += 1) {
+    const tilt = new THREE.Matrix4().makeRotationFromEuler(
+      new THREE.Euler(THREE.MathUtils.degToRad(62), 0, THREE.MathUtils.degToRad(28))
+    );
+    for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const band = (Math.random() - 0.5) * 0.18;
-      const radius = SKY_RADIUS * (0.985 + Math.random() * 0.01);
-      const vector = new THREE.Vector3(Math.cos(angle), band, Math.sin(angle)).normalize().applyMatrix4(tilt).multiplyScalar(radius);
-      positions.set([vector.x, vector.y, vector.z], i * 3);
-      const warmth = 0.72 + Math.random() * 0.24;
-      colors.set([0.42 * warmth, 0.52 * warmth, 0.78 * warmth], i * 3);
+      const bw = 0.14 * Math.pow(Math.random(), 0.6);
+      const band = (Math.random() < 0.5 ? 1 : -1) * bw;
+      const radius = SKY_RADIUS * (0.984 + Math.random() * 0.012);
+      const v = new THREE.Vector3(Math.cos(angle), band, Math.sin(angle)).normalize().applyMatrix4(tilt).multiplyScalar(radius);
+      positions.set([v.x, v.y, v.z], i * 3);
+      const warmth = 0.68 + Math.random() * 0.28;
+      colors.set([0.38 * warmth, 0.48 * warmth, (0.72 + Math.random() * 0.15) * warmth], i * 3);
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     const sizes = new Float32Array(count);
     const intensities = new Float32Array(count);
-    for (let i = 0; i < count; i += 1) {
-      sizes[i] = 0.55 + Math.random() * 1.4;
-      intensities[i] = 0.28 + Math.random() * 0.42;
+    for (let i = 0; i < count; i++) {
+      sizes[i] = 0.45 + Math.random() * 1.6;
+      intensities[i] = 0.22 + Math.random() * 0.48;
     }
     geometry.setAttribute("pointSize", new THREE.BufferAttribute(sizes, 1));
     geometry.setAttribute("intensity", new THREE.BufferAttribute(intensities, 1));
-    const material = createRoundPointMaterial({
-      opacity: this.quality.name === "low" ? 0.16 : 0.24,
-      maxPointSize: this.quality.name === "low" ? 2.4 : 3.4
-    });
-    return new THREE.Points(geometry, material);
-  }
-
-  private async ensureSolarSystemLayer(): Promise<void> {
-    const group = this.groups.get("solar-system")!;
-    if (this.solarSystemLayer) return;
-    this.options.onStatus("Gunes sistemi hazirlaniyor...");
-    this.solarSystemLayer = new SolarSystemLayer(this.options.observation, this.quality);
-    group.add(this.solarSystemLayer.group);
-    await this.solarSystemLayer.mount();
-    this.options.onStatus("Gunes sistemi hazir");
-  }
-
-  private async ensureMilkyWayLayer(): Promise<void> {
-    if (this.milkyWayMounted) return;
-    this.milkyWayMounted = true;
-    const group = this.groups.get("milky-way")!;
-    this.options.onStatus("Samanyolu hazirlaniyor...");
-    try {
-      group.add(await createMilkyWayExternalLayer(this.deepSpaceAssets, this.quality));
-      group.add(this.createSpriteLabel("Samanyolu dis gorunumu temsilidir; Gunes ~8 kpc uzaklikta isaretlenir.", new THREE.Vector3(0, 0.62, 0), "#dbe7ff", 0.48));
-    } catch (error) {
-      console.warn("[deep-space] Milky Way atlas fallback active.", error);
-      this.mountPointCloudLayer("milky-way", this.quality.gaiaPointLimit, "#8bb7ff", 120);
-    }
-    this.options.onStatus("Samanyolu hazir");
-  }
-
-  private async ensureCosmicLayer(): Promise<void> {
-    if (this.cosmicMounted) return;
-    this.cosmicMounted = true;
-    const group = this.groups.get("cosmic-web")!;
-    this.options.onStatus("Evren katmani hazirlaniyor...");
-    try {
-      group.add(await createCosmicGalaxyLayer(this.deepSpaceAssets, this.quality));
-      group.add(this.createSpriteLabel("Galaksi dagilimi temsilidir; gercek katalog konumlari degildir.", new THREE.Vector3(0, 42, 0), "#dbe7ff", 18));
-    } catch (error) {
-      console.warn("[deep-space] Cosmic atlas fallback active.", error);
-      this.mountPointCloudLayer("cosmic-web", this.quality.cosmicPointLimit, "#a8f7ff", 420);
-    }
-    this.options.onStatus("Evren katmani hazir");
+    return new THREE.Points(geometry, createRoundPointMaterial({
+      opacity: this.quality.name === "low" ? 0.08 : 0.12,
+      maxPointSize: this.quality.name === "low" ? 2.8 : 3.8
+    }));
   }
 
   private mountPointCloudLayer(layer: LayerId, count: number, color: string, radius: number): void {
@@ -350,68 +476,75 @@ export class SkyApp {
     const colors = new Float32Array(safeCount * 3);
     const sizes = new Float32Array(safeCount);
     const intensities = new Float32Array(safeCount);
-    for (let i = 0; i < safeCount; i += 1) {
+    for (let i = 0; i < safeCount; i++) {
       const r = radius * Math.cbrt(Math.random());
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
       positions.set([r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi) * 0.12, r * Math.sin(phi) * Math.sin(theta)], i * 3);
-      const depth = 1 - r / radius;
-      const base = new THREE.Color(color);
-      const tint = layer === "cosmic-web" ? new THREE.Color("#d7fbff") : new THREE.Color("#eef4ff");
-      base.lerp(tint, Math.random() * 0.35);
+      const base = new THREE.Color(color).lerp(new THREE.Color("#eef4ff"), Math.random() * 0.35);
       colors.set([base.r, base.g, base.b], i * 3);
-      sizes[i] = (layer === "milky-way" ? 0.55 : 1.05) + Math.random() * (layer === "milky-way" ? 1.6 : 2.8);
-      intensities[i] = 0.22 + depth * 0.45 + Math.random() * 0.28;
+      sizes[i] = 0.55 + Math.random() * 1.6;
+      intensities[i] = 0.22 + (1 - r / radius) * 0.45 + Math.random() * 0.28;
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     geometry.setAttribute("pointSize", new THREE.BufferAttribute(sizes, 1));
     geometry.setAttribute("intensity", new THREE.BufferAttribute(intensities, 1));
-    const material = createRoundPointMaterial({
-      opacity: layer === "milky-way" ? 0.5 : 0.62,
-      maxPointSize: layer === "milky-way" ? 4.2 : 6.5
-    });
-    group.add(new THREE.Points(geometry, material));
+    group.add(new THREE.Points(geometry, createRoundPointMaterial({ opacity: 0.55, maxPointSize: 5 })));
     const text = layer === "milky-way"
-      ? "Samanyolu: Gunes'in galaktik konumu insan omrunde anlamli degismez."
-      : "Kozmik ag: dogum aninin fotografi degil, kozmik adresimizin temsili.";
+      ? "Samanyolu içi temsili görünüm"
+      : "Galaksi dağılımı temsilidir";
     group.add(this.createSpriteLabel(text, new THREE.Vector3(0, radius * 0.1, 0), "#dbe7ff"));
   }
 
   private createSpriteLabel(text: string, position: THREE.Vector3, color: string, worldScale = 0.38): THREE.Sprite {
     const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d")!;
-    canvas.width = 512;
-    canvas.height = 128;
-    context.fillStyle = color;
-    context.font = "600 34px Inter, system-ui, sans-serif";
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillText(text, canvas.width / 2, canvas.height / 2, canvas.width - 24);
-    const texture = new THREE.CanvasTexture(canvas);
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }));
+    const ctx = canvas.getContext("2d")!;
+    canvas.width = 512; canvas.height = 128;
+    ctx.fillStyle = color;
+    ctx.font = "600 34px Inter, system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2, canvas.width - 24);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: new THREE.CanvasTexture(canvas), transparent: true, depthWrite: false
+    }));
     sprite.position.copy(position);
     sprite.scale.set(worldScale, worldScale * 0.25, 1);
     return sprite;
   }
 
+  // ─── Kontroller ───────────────────────────────────────────────────────────
+
   private bindControls(): void {
     const canvas = this.renderer.domElement;
+
     canvas.addEventListener("pointerdown", (event) => {
+      // Her modda click tespiti için kaydet
+      this.pointerDownAt = new THREE.Vector2(event.clientX, event.clientY);
+
+      // Solar system: OrbitControls tam kontrolü alır, biz sadece click tespiti yaparız
+      if (this.activeLayer === "solar-system") return;
+
       this.dragging = true;
       this.lastPointer.set(event.clientX, event.clientY);
-      this.pointerDownAt = new THREE.Vector2(event.clientX, event.clientY);
       this.activePointers.set(event.pointerId, new THREE.Vector2(event.clientX, event.clientY));
       canvas.setPointerCapture(event.pointerId);
     });
+
     canvas.addEventListener("pointermove", (event) => {
+      // Solar system: OrbitControls yönetir
+      if (this.activeLayer === "solar-system") return;
+
       this.activePointers.set(event.pointerId, new THREE.Vector2(event.clientX, event.clientY));
       if (this.activePointers.size === 2) {
         const [first, second] = [...this.activePointers.values()];
         const distance = first.distanceTo(second);
-        if (this.lastPinchDistance) {
-          this.targetFov = THREE.MathUtils.clamp(this.targetFov - (distance - this.lastPinchDistance) * 0.08, 28, 82);
+        if (this.lastPinchDistance !== undefined) {
+          this.targetFov = THREE.MathUtils.clamp(
+            this.targetFov - (distance - this.lastPinchDistance) * 0.08, 28, 82
+          );
         }
         this.lastPinchDistance = distance;
         return;
@@ -420,78 +553,151 @@ export class SkyApp {
       const dx = event.clientX - this.lastPointer.x;
       const dy = event.clientY - this.lastPointer.y;
       this.targetRotation.x -= dx * 0.0032;
-      this.targetRotation.y = THREE.MathUtils.clamp(this.targetRotation.y - dy * 0.0032, -1.35, 1.35);
+      this.targetRotation.y = THREE.MathUtils.clamp(this.targetRotation.y - dy * 0.0032, -Math.PI / 2 + 0.1, Math.PI / 2 - 0.1);
       this.lastPointer.set(event.clientX, event.clientY);
     });
+
     const endPointer = (event: PointerEvent) => {
-      if (this.activeLayer === "solar-system" && this.pointerDownAt) {
-        const up = new THREE.Vector2(event.clientX, event.clientY);
-        if (up.distanceTo(this.pointerDownAt) < 8) {
-          const info = this.solarSystemLayer?.focusFromScreenPoint(up, this.camera, this.renderer.domElement);
-          if (info) this.options.onPlanetInfo?.(info);
+      const isClick = this.pointerDownAt && new THREE.Vector2(event.clientX, event.clientY).distanceTo(this.pointerDownAt) < 8;
+      
+      if (this.activeLayer === "solar-system") {
+        if (isClick) {
+          const up = new THREE.Vector2(event.clientX, event.clientY);
+          const info = this.solarSystemLayer?.focusFromScreenPoint(up, this.camera, this.renderer.domElement) || null;
+          this.options.onPlanetInfo?.(info);
         }
+        this.pointerDownAt = undefined;
+        return;
       }
+
+      if (this.activeLayer === "sky" && isClick) {
+        const ndc = new THREE.Vector2(
+          (event.clientX / this.renderer.domElement.clientWidth) * 2 - 1,
+          -(event.clientY / this.renderer.domElement.clientHeight) * 2 + 1
+        );
+        this.raycaster.setFromCamera(ndc, this.camera);
+        // constellation çizgileri dahil tüm interactive group'ta kontrol et
+        const skyGroup = this.groups.get("sky");
+        const constGroup = skyGroup?.children.find(c => c.children.length > 0 && c.children[0] instanceof THREE.LineSegments);
+        const targets = [...this.interactiveSkyGroup.children];
+        if (constGroup) targets.push(...constGroup.children);
+
+        const intersects = this.raycaster.intersectObjects(targets, false);
+        
+        // Önceki seçiliyi temizle
+        if (constGroup) {
+          constGroup.children.forEach((c: any) => {
+            if (c.material) c.material.color.set("#5c7aaa");
+          });
+        }
+
+        let found = false;
+        for (const hit of intersects) {
+          const ud = hit.object.userData;
+          if (ud.type === "star") {
+            this.options.onPlanetInfo?.({ type: "star", ...ud.info });
+            found = true;
+            break;
+          } else if (ud.type === "constellation") {
+            if (ud.info) {
+              this.options.onPlanetInfo?.({ type: "constellation", ...ud.info });
+              // Highlight
+              const mat = (hit.object as THREE.LineSegments).material as THREE.LineBasicMaterial;
+              mat.color.set("#ffffff");
+              found = true;
+              break;
+            }
+          }
+        }
+        if (!found) this.options.onPlanetInfo?.(null);
+      }
+
       this.activePointers.delete(event.pointerId);
       this.lastPinchDistance = undefined;
       this.dragging = this.activePointers.size > 0;
+      this.pointerDownAt = undefined;
     };
+
     canvas.addEventListener("pointerup", endPointer);
     canvas.addEventListener("pointercancel", endPointer);
+
     canvas.addEventListener("wheel", (event) => {
-      event.preventDefault();
+      event.preventDefault(); // Her zaman sayfa kaydırmayı engelle
+      if (this.activeLayer === "solar-system") return; // OrbitControls zoom
       if (this.activeLayer === "sky") {
         this.targetFov = THREE.MathUtils.clamp(this.targetFov + Math.sign(event.deltaY) * 4, 28, 82);
         return;
       }
       this.zoom = THREE.MathUtils.clamp(this.zoom + Math.sign(event.deltaY) * 0.08, 1, 4);
     }, { passive: false });
+
     window.addEventListener("resize", () => this.resize());
   }
 
   private applyQuality(profile: QualityProfile): void {
     this.renderer.setPixelRatio(profile.pixelRatio);
-    console.info(`[quality] Performans icin ${profile.name} kalite profiline gecildi.`);
+    console.debug(`[quality] ${profile.name} kalite profiline geçildi.`);
     this.resize();
+  }
+
+  /** Gezegen animasyonunu açar/kapar (D maddesi) */
+  setSolarAnimation(enabled: boolean): void {
+    this.solarSystemLayer?.setAnimationEnabled(enabled);
   }
 
   resetSolarSystemView(): void {
     this.solarSystemLayer?.resetFocus();
     this.options.onPlanetInfo?.(null);
-    this.camera.position.set(0, 3.4, 5.8);
-    this.camera.fov = 56;
-    this.camera.lookAt(0, 0, 0);
-    this.camera.updateProjectionMatrix();
   }
+
+  // ─── Ana animasyon döngüsü ────────────────────────────────────────────────
 
   private animate = (): void => {
     this.animation = requestAnimationFrame(this.animate);
     const now = performance.now();
     const deltaSeconds = Math.min((now - this.lastFrame) / 1000, 0.05);
     this.lastFrame = now;
+
+    // Yıldız twinkle zamanı
     for (const material of this.starMaterials) {
       material.uniforms.uTime.value = now / 1000;
     }
+
     this.rotation.lerp(this.targetRotation, 0.08);
     const group = this.groups.get(this.activeLayer);
+
     if (this.activeLayer === "sky") {
+      // Çok yavaş otomatik drift — sinematik his
+      this.driftAngle += deltaSeconds * 0.00008;
       this.camera.position.set(0, 0.02, 0);
       this.camera.rotation.order = "YXZ";
-      this.camera.rotation.y = this.rotation.x;
-      this.camera.rotation.x = this.rotation.y;
+      this.camera.rotation.y = this.rotation.x + Math.sin(this.driftAngle) * 0.004;
+      this.camera.rotation.x = this.rotation.y + Math.cos(this.driftAngle * 0.7) * 0.002;
       this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, this.targetFov, 0.08);
       this.camera.updateProjectionMatrix();
-      if (group) {
-        group.rotation.set(0, 0, 0);
-      }
-    } else if (this.activeLayer === "solar-system" && this.solarSystemLayer) {
-      this.solarSystemLayer.updateCamera(this.camera, deltaSeconds);
+      if (group) group.rotation.set(0, 0, 0);
+
+    } else if (this.activeLayer === "solar-system") {
+      // OrbitControls ve uçuş animasyonu SolarSystemLayer.update() içinde
+
     } else if (group) {
       group.rotation.y = this.rotation.x;
       group.rotation.x = this.rotation.y;
       this.camera.position.z = THREE.MathUtils.lerp(this.camera.position.z, 1.7 + this.zoom * 0.7, 0.04);
     }
+
+    // Güneş sistemi animasyonları (revolution + spin + OrbitControls)
     this.solarSystemLayer?.update(deltaSeconds);
-    this.renderer.render(this.scene, this.camera);
+    // Güneş yüzey shader zamanı
+    this.solarSystemLayer?.updateSunTime(now / 1000);
+
+    // Render — bloom varsa composer, yoksa direkt
+    if (this.composer && this.quality.name !== "low") {
+      this.composer.render();
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
+
     this.qualityController.sampleFrame();
   };
 }

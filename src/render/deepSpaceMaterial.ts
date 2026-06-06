@@ -12,7 +12,7 @@ export function createDeepSkyMaterial(texture: THREE.Texture, location: Resolved
       uMap: { value: texture },
       uLatitude: { value: location.latitude * DEG2RAD },
       uLst: { value: lstDegrees * DEG2RAD },
-      uOpacity: { value: 0.78 }
+      uOpacity: { value: 0.92 }
     },
     vertexShader: `
       varying vec3 vDir;
@@ -46,7 +46,8 @@ export function createDeepSkyMaterial(texture: THREE.Texture, location: Resolved
         float u = 1.0 - ra / (2.0 * PI);
         float v = 0.5 - dec / PI;
         vec3 color = texture2D(uMap, vec2(u, v)).rgb;
-        float horizonFade = smoothstep(-0.08, 0.08, dir.y);
+        // Yumuşak ufuk solması
+        float horizonFade = smoothstep(-0.12, 0.06, dir.y);
         gl_FragColor = vec4(color * uOpacity * horizonFade, 1.0);
       }
     `
@@ -78,7 +79,7 @@ export function createAtlasBillboardMaterial(texture: THREE.Texture, columns: nu
         vIntensity = intensity;
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
         float attenuation = 360.0 / max(90.0, -mvPosition.z);
-        gl_PointSize = clamp(pointSize * attenuation * uPixelRatio, 1.2, 70.0 * uPixelRatio);
+        gl_PointSize = clamp(pointSize * attenuation * uPixelRatio, 1.2, 80.0 * uPixelRatio);
         gl_Position = projectionMatrix * mvPosition;
       }
     `,
@@ -98,7 +99,8 @@ export function createAtlasBillboardMaterial(texture: THREE.Texture, columns: nu
         float row = floor(vAtlasIndex / uColumns);
         vec2 tileUv = (vec2(col, row) + gl_PointCoord) / vec2(uColumns, uRows);
         vec4 texel = texture2D(uMap, tileUv);
-        float edge = smoothstep(0.5, 0.34, d);
+        // Yumuşak kenar geçişi — galaksi fotoğraflarına doğal his
+        float edge = smoothstep(0.5, 0.28, d);
         gl_FragColor = vec4(texel.rgb * vIntensity, texel.a * edge * vIntensity);
       }
     `

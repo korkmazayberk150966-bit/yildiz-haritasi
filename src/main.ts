@@ -1,6 +1,7 @@
 import "./styles.css";
 
 import { localBirthTimeToUtc, resolveLocation } from "./astro/time";
+import type { PlanetInfo } from "./render/SolarSystemLayer";
 import { SkyApp } from "./render/SkyApp";
 import type { BirthInput, LayerId, ResolvedLocation } from "./types";
 
@@ -60,12 +61,13 @@ app.innerHTML = `
       </div>
       <div class="topbar">
         <button class="secondary" id="back">Yeni tarih</button>
-        <p id="scene-status">Hazirlaniyor...</p>
-        <button class="secondary compact" id="reset-view" hidden>Tumunu sigdir</button>
+        <p id="scene-status">Hazırlanıyor...</p>
+        <button class="secondary compact" id="anim-toggle" hidden>▶ Zaman</button>
+        <button class="secondary compact" id="reset-view" hidden>Tümünü sığdır</button>
       </div>
       <aside class="planet-card" id="planet-card" hidden></aside>
       <nav class="layers" aria-label="Katmanlar">
-        <button data-layer="sky" class="active">1 Gokyuzu</button>
+        <button data-layer="sky" class="active">1 Gökyüzü</button>
         <button data-layer="solar-system">2 Sistem</button>
         <button data-layer="milky-way">3 Samanyolu</button>
         <button data-layer="cosmic-web">4 Evren</button>
@@ -82,6 +84,7 @@ const viewer = document.querySelector<HTMLElement>("#viewer")!;
 const canvasWrap = document.querySelector<HTMLElement>("#canvas-wrap")!;
 const cityList = document.querySelector<HTMLDataListElement>("#city-list")!;
 const resetView = document.querySelector<HTMLButtonElement>("#reset-view")!;
+const animToggle = document.querySelector<HTMLButtonElement>("#anim-toggle")!;
 const planetCard = document.querySelector<HTMLElement>("#planet-card")!;
 const loadingOverlay = document.querySelector<HTMLElement>("#loading-overlay")!;
 
@@ -107,6 +110,15 @@ document.querySelector<HTMLButtonElement>("#geo")!.addEventListener("click", () 
     },
     { enableHighAccuracy: false, timeout: 10000 }
   );
+});
+
+// Animasyon toggle (D maddesi)
+let animEnabled = false;
+animToggle.addEventListener("click", () => {
+  animEnabled = !animEnabled;
+  skyApp?.setSolarAnimation(animEnabled);
+  animToggle.textContent = animEnabled ? "⏸ Dondur" : "▶ Zaman";
+  animToggle.classList.toggle("active", animEnabled);
 });
 
 document.querySelector<HTMLButtonElement>("#back")!.addEventListener("click", () => {
@@ -144,6 +156,7 @@ form.addEventListener("submit", async (event) => {
     const location = resolveLocation(input.cityName || "Secili konum", input.latitude, input.longitude);
     await startSky(input, location);
   } catch (error) {
+    console.error("Submit error:", error);
     statusEl.textContent = error instanceof Error ? error.message : "Bilinmeyen hata.";
   }
 });
@@ -154,7 +167,8 @@ document.querySelectorAll<HTMLButtonElement>("[data-layer]").forEach((button) =>
 
 async function startSky(input: BirthInput, location: ResolvedLocation): Promise<void> {
   if (!isWebGlAvailable()) throw new Error("WebGL desteklenmiyor; bu uygulama WebGL gerektirir.");
-  statusEl.textContent = "Gokyuzu hesaplaniyor...";
+  statusEl.textContent = "Gökyüzü hesaplanıyor...";
+
   loadingOverlay.hidden = false;
   intro.hidden = true;
   viewer.hidden = false;
@@ -171,21 +185,99 @@ async function startSky(input: BirthInput, location: ResolvedLocation): Promise<
     },
     onStatus: (status) => {
       sceneStatus.textContent = `${status} · ${location.name} · ${location.timezone}`;
-      loadingOverlay.hidden = status === "Hazir" || status.endsWith("hazir");
     },
     onSolarSystemReady: (ready) => {
       resetView.hidden = !ready;
-      if (!ready) planetCard.hidden = true;
+      animToggle.hidden = !ready;
+      if (!ready) {
+        planetCard.hidden = true;
+        // Layer değişince animasyonu sifırla
+        animEnabled = false;
+        skyApp?.setSolarAnimation(false);
+        animToggle.textContent = "▶ Zaman";
+        animToggle.classList.remove("active");
+      }
     },
-    onPlanetInfo: (info) => {
+    onPlanetInfo: (info: any | null) => {
       if (!info) {
         planetCard.hidden = true;
         return;
       }
+      
+      if (info.type === "star") {
+        planetCard.innerHTML = `
+          <div class="card-header">
+            <span class="card-symbol" style="color:${info.colorDesc.includes('Mavi') ? '#9fb9e8' : info.colorDesc.includes('Sarı') ? '#ffe28a' : info.colorDesc.includes('Kırmızı') ? '#ff8a8a' : '#fff'}">✨</span>
+            <div>
+              <p class="card-kicker">Parlak Yıldız</p>
+              <h2>${info.name}</h2>
+            </div>
+          </div>
+          <div class="card-grid">
+            <div class="card-section"><p class="card-label">Takımyıldız</p><p class="card-value">${info.con}</p></div>
+            <div class="card-section"><p class="card-label">Uzaklık</p><p class="card-value">${info.distLy} Işık Yılı</p></div>
+            <div class="card-section"><p class="card-label">Kadir (Parlaklık)</p><p class="card-value">${info.mag}</p></div>
+            <div class="card-section"><p class="card-label">Tür/Renk</p><p class="card-value">${info.colorDesc}</p></div>
+          </div>
+          <div class="card-section card-meaning">
+            <p class="card-label">Hakkında</p>
+            <p class="card-text">${info.desc}</p>
+          </div>
+        `;
+        planetCard.hidden = false;
+        return;
+      }
+
+      if (info.type === "constellation") {
+        planetCard.innerHTML = `
+          <div class="card-header">
+            <span class="card-symbol" style="color: #94b2e4;">🌌</span>
+            <div>
+              <p class="card-kicker">Takımyıldız</p>
+              <h2>${info.nameTR}</h2>
+            </div>
+          </div>
+          <div class="card-grid">
+            <div class="card-section"><p class="card-label">Latince Adı</p><p class="card-value">${info.name} (${info.id})</p></div>
+            <div class="card-section"><p class="card-label">En Parlak Yıldızı</p><p class="card-value">${info.brightest}</p></div>
+          </div>
+          <div class="card-section card-meaning">
+            <p class="card-label">Mitolojik Anlamı</p>
+            <p class="card-text">${info.desc}</p>
+          </div>
+        `;
+        planetCard.hidden = false;
+        return;
+      }
+
+      const kmStr = info.distanceKm.toLocaleString("tr-TR");
+      const zodiacStr = `${info.zodiacSign} ${info.zodiacDegree}°`;
+      const generationalNote = info.isGenerational
+        ? `<p class="card-note">⚠️ Kuşak gezegeni: etkisi bireysel değil, toplumsal/kuşaksal okunur.</p>`
+        : "";
+      const aspectSection = info.name !== "Güneş" && info.aspectText
+        ? `<div class="card-section"><p class="card-label">Güneş ile Açı</p><p class="card-text">${info.aspectText}</p></div>`
+        : "";
       planetCard.innerHTML = `
-        <p class="card-kicker">Gezegen odagi</p>
-        <h2>${info.name}</h2>
-        <p>Gunes'e uzaklik: ${info.distanceAu.toFixed(2)} AU</p>
+        <div class="card-header">
+          <span class="card-symbol">${info.symbol}</span>
+          <div>
+            <p class="card-kicker">Gezegen odağı</p>
+            <h2>${info.name}</h2>
+          </div>
+        </div>
+        <div class="card-grid">
+          <div class="card-section"><p class="card-label">Zodyak Konumu</p><p class="card-value">${zodiacStr}</p></div>
+          <div class="card-section"><p class="card-label">Dünya'dan Uzaklık</p><p class="card-value">${kmStr} km</p></div>
+        </div>
+        <div class="card-section card-meaning">
+          <p class="card-label">Astrolojik Anlam</p>
+          <p class="card-keywords">${info.keywords}</p>
+          <p class="card-text">${info.meaning}</p>
+        </div>
+        ${aspectSection}
+        ${generationalNote}
+        <p class="card-disclaimer">ℹ️ Astrolojik yorumlar eğlence/ilham amaçlıdır.</p>
       `;
       planetCard.hidden = false;
     }

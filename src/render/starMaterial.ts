@@ -33,12 +33,27 @@ export function createStarMaterial(options: StarMaterialOptions = {}): THREE.Sha
         vMagnitude = magnitude;
         vBv = bv;
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        float brightness = clamp((6.8 - magnitude) / 6.8, 0.08, 1.0);
-        float twinkle = uTwinkle == 1 ? 0.9 + 0.1 * sin(uTime * 2.4 + position.x * 0.037 + position.y * 0.021) : 1.0;
+
+        // Gerçek kadir ölçeğine göre parlaklık: mag 7.0'a kadar görünür
+        float brightness = clamp((7.0 - magnitude) / 7.0, 0.05, 1.0);
+
+        // Çok parlak yıldızlar (mag < 1) ekstra büyük
+        float starClass = smoothstep(1.0, -1.5, magnitude);
+
+        // Doğal twinkle: yavaş, nefes alır gibi
+        float twinkle = 1.0;
+        if (uTwinkle == 1) {
+          float t = uTime;
+          float phase = position.x * 0.041 + position.y * 0.027 + position.z * 0.019;
+          twinkle = 0.88 + 0.12 * sin(t * 1.8 + phase)
+                        * (0.7 + 0.3 * sin(t * 0.7 + phase * 2.1));
+        }
         vTwinkle = twinkle;
-        float attenuated = 190.0 / max(150.0, -mvPosition.z);
-        float rawSize = (0.85 + brightness * 2.55) * uPixelRatio * uSizeScale * attenuated;
-        gl_PointSize = clamp(rawSize, 0.75, 5.5 * uPixelRatio);
+
+        float attenuated = 200.0 / max(150.0, -mvPosition.z);
+        // Boyut: sönük yıldızlar ince nokta, parlak yıldızlar belirgin
+        float rawSize = (0.7 + brightness * 3.8 + starClass * 2.2) * uPixelRatio * uSizeScale * attenuated;
+        gl_PointSize = clamp(rawSize, 0.5, 9.0 * uPixelRatio);
         gl_Position = projectionMatrix * mvPosition;
       }
     `,
@@ -87,11 +102,20 @@ export function createStarMaterial(options: StarMaterialOptions = {}): THREE.Sha
         vec2 uv = gl_PointCoord - vec2(0.5);
         float d = length(uv);
         if (d > 0.5) discard;
-        float core = smoothstep(0.5, 0.08, d);
-        float halo = smoothstep(0.5, 0.0, d) * 0.25;
-        float alpha = clamp(core + halo, 0.0, 1.0);
-        float brightness = pow(clamp((6.8 - vMagnitude) / 6.8, 0.08, 1.0), 1.4) * vTwinkle;
+
+        // Keskin çekirdek + geniş yumuşak halo
+        float core = smoothstep(0.5, 0.03, d);
+        float halo = smoothstep(0.5, 0.0, d) * 0.42;
+        // Parlak yıldızlar için ekstra geniş halka
+        float brightHalo = smoothstep(0.48, 0.0, d) * 0.18 * smoothstep(2.5, -1.5, vMagnitude);
+        float alpha = clamp(core + halo + brightHalo, 0.0, 1.0);
+
+        float brightness = pow(clamp((7.0 - vMagnitude) / 7.0, 0.05, 1.0), 1.2) * vTwinkle;
         vec3 color = kelvinToRgb(bvToKelvin(vBv));
+
+        // Hafif beyazlaştırma: çok sıcak/soğuk uçlarda renk daha saf
+        color = mix(color, vec3(1.0), 0.08);
+
         gl_FragColor = vec4(color * brightness, alpha * brightness * uOpacity);
       }
     `
