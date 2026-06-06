@@ -1,4 +1,5 @@
-export type LayerId = "sky" | "solar-system" | "milky-way" | "cosmic-web";
+export type LayerId = "sky" | "stars" | "constellations" | "solar-system" | "milky-way" | "cosmic-web";
+export type AppMode = "free-roam" | "astrology";
 
 export interface BirthInput {
   date: string;
@@ -39,6 +40,11 @@ export interface QualityProfile {
   skyTextureTier: "4k" | "8k";
   deepSpaceSpriteLimit: number;
   useHeroSprites: boolean;
+  cinematicEffects: "full" | "reduced" | "off";
+  streamingBudgetMb: number;
+  maxActiveTiles: number;
+  raymarchEnabled: boolean;
+  blackHoleEffectEnabled: boolean;
 }
 
 export interface RenderLayer {

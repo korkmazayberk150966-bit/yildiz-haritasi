@@ -31,10 +31,7 @@ button, input, summary { min-height: 44px; }
   justify-content: center;
   align-items: center;
   padding: max(22px, env(safe-area-inset-top, 0px)) max(18px, env(safe-area-inset-right, 0px)) max(22px, env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px));
-  background:
-    radial-gradient(circle at 50% 8%, rgba(74, 116, 210, 0.32), transparent 34%),
-    radial-gradient(circle at 18% 84%, rgba(105, 71, 196, 0.18), transparent 32%),
-    linear-gradient(180deg, #071023 0%, #030711 48%, #01030a 100%);
+  background: #02040a;
   text-align: center;
   z-index: 20;
 }
@@ -44,13 +41,36 @@ button, input, summary { min-height: 44px; }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image:
-    radial-gradient(circle, rgba(255,255,255,0.86) 0 1px, transparent 1.4px),
-    radial-gradient(circle, rgba(157,188,255,0.62) 0 1px, transparent 1.5px);
-  background-size: 86px 86px, 137px 137px;
-  background-position: 12px 18px, 44px 64px;
-  opacity: 0.22;
-  mask-image: linear-gradient(to bottom, #000 0%, transparent 82%);
+  background:
+    radial-gradient(circle at 50% 8%, rgba(74, 116, 210, 0.24), transparent 34%),
+    linear-gradient(180deg, rgba(2,4,10,0.05), rgba(2,4,10,0.58) 72%, rgba(2,4,10,0.9));
+  opacity: 1;
+}
+
+.landing-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.landing-canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.landing-overlay {
+  position: relative;
+  z-index: 1;
+  width: min(720px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 26px;
+  border: 1px solid rgba(184, 206, 255, 0.16);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(8, 14, 28, 0.34), rgba(4, 8, 18, 0.18));
+  box-shadow: 0 30px 120px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255,255,255,0.08);
+  backdrop-filter: blur(18px);
 }
 
 .intro-stars {
@@ -106,6 +126,88 @@ button, input, summary { min-height: 44px; }
   color: #b4c7e7;
   font-size: 1.06rem;
   margin-bottom: 28px;
+}
+
+.mode-grid {
+  position: relative;
+  z-index: 1;
+  width: min(620px, 100%);
+  display: grid;
+  grid-template-columns: 1.08fr 0.92fr;
+  gap: 14px;
+}
+
+.mode-card {
+  min-height: 132px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 18px;
+  text-align: left;
+  border-radius: 14px;
+  border: 1px solid rgba(174, 202, 255, 0.22);
+  background:
+    radial-gradient(circle at 16% 20%, rgba(255,255,255,0.16), transparent 30%),
+    linear-gradient(145deg, rgba(30, 47, 84, 0.62), rgba(8, 14, 28, 0.46));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 16px 46px rgba(0,0,0,0.22);
+}
+
+.mode-card.primary {
+  border-color: rgba(117, 158, 255, 0.5);
+  background:
+    radial-gradient(circle at 18% 22%, rgba(255,255,255,0.2), transparent 30%),
+    linear-gradient(145deg, rgba(45, 92, 204, 0.82), rgba(22, 40, 85, 0.62));
+}
+
+.mode-card span {
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.mode-card small {
+  color: #b9c9e8;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.astro-panel {
+  position: absolute;
+  z-index: 30;
+  left: 50%;
+  bottom: max(14px, env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 24px));
+  max-height: min(82vh, 720px);
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid rgba(164, 193, 255, 0.24);
+  border-radius: 20px;
+  background: rgba(5, 10, 22, 0.88);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.54);
+  backdrop-filter: blur(22px);
+}
+
+.panel-grabber {
+  width: 48px;
+  height: 4px;
+  margin: 2px auto 12px;
+  border-radius: 999px;
+  background: rgba(184, 206, 255, 0.28);
+}
+
+.astro-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 0 4px 12px;
+  text-align: left;
+}
+
+.astro-panel-head h2 {
+  font-size: 1.1rem;
 }
 
 .birth-form {
@@ -265,6 +367,27 @@ button.secondary:hover { background: rgba(255, 255, 255, 0.14); }
   backdrop-filter: blur(8px);
 }
 
+.astro-toggle {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 999px;
+  color: #c8d9f7;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.78rem;
+  font-weight: 700;
+  backdrop-filter: blur(10px);
+}
+.astro-toggle input {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  accent-color: #6b8dff;
+}
+
 .planet-card {
   position: absolute;
   top: 78px;
@@ -399,7 +522,7 @@ button.secondary:hover { background: rgba(255, 255, 255, 0.14); }
   right: 12px;
   bottom: max(12px, env(safe-area-inset-bottom, 0));
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
   padding: 8px;
   border: 1px solid rgba(136, 168, 220, 0.24);
@@ -443,6 +566,10 @@ button.secondary:hover { background: rgba(255, 255, 255, 0.14); }
   .lead {
     margin-bottom: 16px;
   }
+  .landing-overlay {
+    width: min(760px, 100%);
+    padding: 18px;
+  }
   .birth-form {
     max-width: 760px;
     display: grid;
@@ -468,6 +595,16 @@ button.secondary:hover { background: rgba(255, 255, 255, 0.14); }
     max-width: 360px;
     font-size: 0.98rem;
   }
+  .landing-overlay {
+    padding: 18px;
+    border-radius: 16px;
+  }
+  .mode-grid {
+    grid-template-columns: 1fr;
+  }
+  .mode-card {
+    min-height: 108px;
+  }
   .birth-form {
     max-width: 100%;
     padding: 16px;
@@ -480,12 +617,15 @@ button.secondary:hover { background: rgba(255, 255, 255, 0.14); }
     left: max(8px, env(safe-area-inset-left, 0px));
     right: max(8px, env(safe-area-inset-right, 0px));
     gap: 8px;
+    flex-wrap: wrap;
   }
   .topbar button {
     padding: 8px 10px;
     font-size: 0.78rem;
   }
   #scene-status {
+    order: 4;
+    flex-basis: 100%;
     font-size: 0.72rem;
     padding: 6px 8px;
   }
@@ -506,6 +646,7 @@ button.secondary:hover { background: rgba(255, 255, 255, 0.14); }
     left: max(8px, env(safe-area-inset-left, 0px));
     right: max(8px, env(safe-area-inset-right, 0px));
     bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
   }
   .layers button {

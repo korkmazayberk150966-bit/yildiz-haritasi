@@ -209,6 +209,7 @@ export function createMilkyWayInteriorLayer(quality: QualityProfile): THREE.Grou
 
   // Güneş konumu işareti
   group.add(createSunMarker());
+  if (quality.blackHoleEffectEnabled) group.add(createSagittariusAStar());
 
   return group;
 }
@@ -335,6 +336,55 @@ function createSunMarker(): THREE.Group {
   );
   halo.position.copy(marker.position);
   group.add(halo);
+  return group;
+}
+
+function createSagittariusAStar(): THREE.Group {
+  const group = new THREE.Group();
+  group.position.set(0, 0.01, 0);
+  group.userData = {
+    type: "black-hole",
+    info: {
+      name: "Sagittarius A*",
+      desc: "Samanyolu'nun merkezindeki süper kütleli kara delik. Kütlesi yaklaşık 4,3 milyon Güneş kütlesi, uzaklığı yaklaşık 26.000 ışık yılıdır.",
+      distance: "~26.000 ışık yılı",
+      mass: "~4,3 milyon Güneş kütlesi"
+    }
+  };
+
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(0.055, 32, 16),
+    new THREE.MeshBasicMaterial({ color: "#02030a" })
+  );
+  core.userData = group.userData;
+  group.add(core);
+
+  const ringMaterial = new THREE.MeshBasicMaterial({
+    color: "#ffb35a",
+    transparent: true,
+    opacity: 0.82,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.09, 0.18, 96), ringMaterial);
+  ring.rotation.x = THREE.MathUtils.degToRad(74);
+  ring.userData = group.userData;
+  group.add(ring);
+
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(0.34, 32, 16),
+    new THREE.MeshBasicMaterial({
+      color: "#ff8a3d",
+      transparent: true,
+      opacity: 0.08,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    })
+  );
+  glow.userData = group.userData;
+  group.add(glow);
+
   return group;
 }
 

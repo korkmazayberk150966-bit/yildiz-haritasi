@@ -1,6 +1,8 @@
 # Gökkubbe
 
-Mobil öncelikli, statik ve offline çalışan bir astronomi PWA'sı. Kullanıcı doğum tarihi, saati ve konumunu girer; uygulama o anki yerel gökyüzünü WebGL ile render eder.
+Mobil öncelikli, statik yayınlanabilen bir astronomi PWA'sı. Varsayılan giriş “Serbest Gezi”dir: kullanıcı tarih/konum vermeden Samanyolu içi sinematik sahneye girer. “Astroloji Modu” ayrı panelden doğum tarihi, saati ve konum alır; uygulama o anki yerel gökyüzünü WebGL ile render eder.
+
+App shell, temel HYG yıldız verisi, şehir listesi ve gezegen dokuları cache'lenir. Büyük deep-space panoramalar ve `public/tiles` altındaki streaming veriler precache'e girmez; gerektiğinde indirilir ve service worker tarafından sınırlı runtime cache ile saklanır.
 
 ## Kurulum
 
@@ -9,6 +11,7 @@ npm install
 npm run data:hyg
 npm run data:planets
 npm run data:deep-space
+npm run data:sample-tiles
 npm run build
 ```
 
@@ -23,6 +26,7 @@ npx tsx data/build-hyg.ts --sample
 - Vite + TypeScript + Three.js.
 - PWA cache ve manifest `vite-plugin-pwa` ile üretilir.
 - Gezegen, Güneş ve Ay konumları runtime API kullanmadan `astronomy-engine` ile istemci tarafında hesaplanır.
+- `startFreeRoam()` konumsuz galaksi-içi serbest geziyi, `startAstrologyMode()` doğum/konum tabanlı yerel gökyüzünü başlatır.
 - HYG v4.x CSV build aşamasında `Float32Array` binary asset'e dönüştürülür: `[RA, Dec, magnitude, B-V]`.
 - Yıldızlar tekil mesh değil, `BufferGeometry + Points + ShaderMaterial` ile çizilir.
 - B-V renk indeksi shader içinde B-V -> Kelvin -> RGB blackbody yaklaşımıyla renge dönüşür.
@@ -32,7 +36,29 @@ npx tsx data/build-hyg.ts --sample
 
 Uygulama cihaz belleği, çekirdek sayısı, pixel ratio ve kısa FPS ölçümüne göre kalite profili seçer. Zayıf cihazlarda pixel ratio ve point cloud limitleri otomatik düşer. Katman 3 Gaia temsili ve Katman 4 kozmik ağ için sert üst sınırlar vardır; amaç RAM/GPU taşmasını ve çöküşü önlemektir.
 
+Kalite profili ayrıca sinematik efektleri ve streaming bütçesini yönetir: `cinematicEffects`, `streamingBudgetMb`, `maxActiveTiles`, `raymarchEnabled` ve `blackHoleEffectEnabled`. Düşük profilde bloom/parallax sadeleşir, aktif tile sayısı azalır ve ağır görsel efektler kapanır.
+
 Katman 2 gezegen render'ı da aynı kalite profiline bağlıdır. Düşük profilde küre segmentleri azalır; Dünya gece ışıkları, bulut katmanı ve atmosfer gibi ekstra draw-call/texture kullanan katmanlar kapatılır. Yüklenen dokular GPU'ya verilmeden önce kalite profiline göre 512/1024/2048 px üst sınırına indirgenir. Gezegen doku asset'leri Katman 2 ilk açıldığında lazy yüklenir ve PWA cache'e dahil edilir.
+
+## Serbest Gezi ve Tile Sözleşmesi
+
+Serbest Gezi modu `milky-way` katmanını varsayılan açar. Bu katman dışarıdan galaksi resmi değil, Güneş'in galaktik disk içindeki konumu çevresinden görülen temsili iç-galaksi sahnesidir. Yüksek kalite profilinde Sagittarius A* için billboard/shader tabanlı bir görsel hedef eklenir; tam raymarch/lensing sonraki veri fazına bırakılmıştır.
+
+Streaming veri sözleşmesi `public/tiles/manifest.json` ile başlar. Her tile:
+
+- `id`, `kind`, `lod`, `url`, `byteLength`
+- `bounds.min/max`
+- `pointCount`
+
+alanlarını taşır. Binary tile formatı MVP için `Float32Array` stride 8 şeklindedir: `[x, y, z, r, g, b, pointSize, intensity]`.
+
+Örnek küçük LOD setini üretmek:
+
+```bash
+npm run data:sample-tiles
+```
+
+Varsayılan host GitHub Pages `public/tiles` dizinidir. İleride Edenhofer/Gaia ETL çıktıları aynı manifest sözleşmesine göre CDN veya bucket'a taşınabilir.
 
 ## Katman 2 Doku Hatti
 
@@ -52,7 +78,7 @@ Katman 1/3/4 için NASA SVS Deep Star Maps 2020 ve NASA/Hubble atlaslarını ür
 npm run data:deep-space
 ```
 
-Script ana kaynak olarak celestial/J2000 koordinatlı, parlak Hipparcos/Tycho yıldızları ayrılmış `milkyway_2020_4k/8k.exr` dosyalarını hedefler. Bu yerel ortamda EXR decoder desteği yoksa otomatik olarak aynı SVS ürününün `milkyway_2020_4k_print.jpg` fallback'inden optimize WebP üretir. Büyük deep-space asset'leri PWA precache'e alınmaz; service worker bunları runtime cache ile sınırlı süre/sayıda saklar.
+Script ana kaynak olarak celestial/J2000 koordinatlı, parlak Hipparcos/Tycho yıldızları ayrılmış `milkyway_2020_4k/8k.exr` dosyalarını hedefler. Bu yerel ortamda EXR decoder desteği yoksa otomatik olarak aynı SVS ürününün `milkyway_2020_4k_print.jpg` fallback'inden optimize WebP üretir. Büyük deep-space asset'leri ve `public/tiles` verileri PWA precache'e alınmaz; service worker bunları runtime cache ile sınırlı süre/sayıda saklar.
 
 ## Astroloji Sözlüğü
 
@@ -90,7 +116,7 @@ Build çıktısı:
 npm run build
 ```
 
-`dist/` klasörü GitHub Pages'e verilir. Yanlış `base` ayarı asset 404 hatalarına ve boş sayfaya neden olur.
+`dist/` klasörü GitHub Pages'e verilir. Yanlış `base` ayarı asset/tile 404 hatalarına ve boş sayfaya neden olur.
 
 ## Test
 
@@ -101,4 +127,4 @@ npm run build
 
 ## Durum
 
-İlk sürüm Katman 1'i üretim kalitesinde hedefler. Katman 2-4 için modüler render iskeleti ve adaptif nokta limitleri hazırdır; sonraki adım bu katmanları daha zengin açık veri setleriyle doldurmaktır.
+Mevcut sürüm sinematik Serbest Gezi MVP'sini, Astroloji Modu panelini, Katman 1 yerel gökyüzünü, gerçekçi Katman 2 gezegenlerini ve Katman 3/4 görsel iskeletini içerir. Büyük bilimsel tiled streaming/ETL veri üretimi sonraki faza bırakılmıştır.

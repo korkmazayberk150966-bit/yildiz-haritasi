@@ -2,7 +2,7 @@ import * as THREE from "three";
 
 import { CONSTELLATION_SEGMENTS, constellationSegmentToVectors } from "../astro/constellations";
 import { computeSolarSystemObjects } from "../astro/planets";
-import type { LayerId, ObservationTime, QualityProfile, ResolvedLocation } from "../types";
+import type { AppMode, LayerId, ObservationTime, QualityProfile, ResolvedLocation } from "../types";
 import { loadSkyStars } from "./data";
 import {
   createCosmicGalaxyLayer,
@@ -16,21 +16,33 @@ import { createRoundPointMaterial } from "./roundPointMaterial";
 import type { PlanetInfo } from "./SolarSystemLayer";
 import { SolarSystemLayer } from "./SolarSystemLayer";
 import { createStarMaterial } from "./starMaterial";
+import { TileManager } from "./streamingTiles";
 
 // Lazy-load postprocessing (bloom) — ilk pakete girmesin
 type Composer = { render(): void; setSize(w: number, h: number): void };
 
 interface SkyAppOptions {
   container: HTMLElement;
-  location: ResolvedLocation;
-  observation: ObservationTime;
+  mode: AppMode;
+  astrologyEnabled: boolean;
+  location?: ResolvedLocation;
+  observation?: ObservationTime;
   onLayerChange: (layer: LayerId) => void;
   onStatus: (status: string) => void;
   onSolarSystemReady?: (ready: boolean) => void;
+  onNeedsAstrologyInput?: () => void;
   onPlanetInfo: (info: PlanetInfo | Record<string, unknown> | null) => void;
 }
 
-const LAYERS: LayerId[] = ["sky", "solar-system", "milky-way", "cosmic-web"];
+const LAYERS: LayerId[] = ["sky", "stars", "constellations", "solar-system", "milky-way", "cosmic-web"];
+const VISIBLE_GROUP_BY_LAYER: Record<LayerId, LayerId> = {
+  sky: "sky",
+  stars: "sky",
+  constellations: "sky",
+  "solar-system": "solar-system",
+  "milky-way": "milky-way",
+  "cosmic-web": "cosmic-web"
+};
 const SKY_RADIUS = 180;
 const HORIZON_RADIUS = 120;
 
@@ -64,6 +76,12 @@ export class SkyApp {
   private cosmicMounted = false;
   private composer?: Composer;
   private driftAngle = 0; // kamera sürüklenme açısı
+  private tileManager?: TileManager;
+  private fallbackObservation: ObservationTime = {
+    localDateTime: new Date().toISOString(),
+    utcDate: new Date(),
+    timezone: "UTC"
+  };
 
   constructor(private options: SkyAppOptions) {
     this.quality = detectInitialQuality();
@@ -87,11 +105,18 @@ export class SkyApp {
   }
 
   async mount(): Promise<void> {
-    this.options.onStatus("Gökyüzü hazırlanıyor...");
-    await this.mountSkyLayer();
-    this.setLayer("sky");
+    if (this.options.mode === "astrology") {
+      this.options.onStatus("Gökyüzü hazırlanıyor...");
+      await this.mountSkyLayer();
+      this.setLayer("sky");
+      this.options.onStatus("Gökyüzü hazır");
+    } else {
+      this.options.onStatus("Serbest gezi hazırlanıyor...");
+      await this.ensureMilkyWayLayer();
+      this.setLayer("milky-way");
+      this.options.onStatus("Serbest gezi hazır");
+    }
     this.animate();
-    this.options.onStatus("Gökyüzü hazır");
 
     // Bloom'u arka planda yükle (initial pakete girmesin)
     void this.setupBloom();
@@ -99,13 +124,24 @@ export class SkyApp {
 
   setLayer(layer: LayerId): void {
     this.resetPointerState();
+    if ((layer === "sky" || layer === "stars" || layer === "constellations") && !this.canMountLocalSky()) {
+      this.options.onStatus("Yerel gökyüzü için Astroloji Modu / zaman-konum bilgisi gerekli.");
+      this.options.onNeedsAstrologyInput?.();
+      return;
+    }
     this.activeLayer = layer;
-    for (const [id, group] of this.groups) group.visible = id === layer;
-    this.zoom = LAYERS.indexOf(layer) + 1;
+    const visibleGroup = VISIBLE_GROUP_BY_LAYER[layer];
+    for (const [id, group] of this.groups) group.visible = id === visibleGroup;
+    this.zoom = layer === "milky-way" ? 1.25 : layer === "cosmic-web" ? 3.6 : LAYERS.indexOf(layer) + 1;
     this.options.onLayerChange(layer);
 
-    if (layer === "sky") {
-      this.options.onStatus("Gökyüzü hazır");
+    if (layer === "sky" || layer === "stars" || layer === "constellations") {
+      const status = layer === "stars"
+        ? "Yıldızlar ve parlak yıldız seçimleri hazır"
+        : layer === "constellations"
+          ? "Takımyıldızları hazır"
+          : "Gökyüzü hazır";
+      this.options.onStatus(status);
       this.options.onSolarSystemReady?.(false);
       this.options.onPlanetInfo?.(null);
       this.camera.position.set(0, 0.02, 0);
@@ -146,6 +182,7 @@ export class SkyApp {
   dispose(): void {
     cancelAnimationFrame(this.animation);
     this.solarSystemLayer?.dispose();
+    this.tileManager?.dispose();
     this.renderer.dispose();
     this.options.container.replaceChildren();
   }
@@ -161,11 +198,18 @@ export class SkyApp {
   }
 
   private async mountSkyLayer(): Promise<void> {
+    if (!this.canMountLocalSky()) {
+      this.options.onNeedsAstrologyInput?.();
+      return;
+    }
     const group = this.groups.get("sky")!;
+    if (group.children.length > 0) return;
+    const observation = this.options.observation!;
+    const location = this.options.location!;
     const stars = await loadSkyStars(
       `${import.meta.env.BASE_URL}stars/hyg-stars.bin`,
-      this.options.observation.utcDate,
-      this.options.location,
+      observation.utcDate,
+      location,
       this.quality.starPointLimit
     );
 
@@ -227,6 +271,7 @@ export class SkyApp {
   }
 
   private async addPhotographicSky(group: THREE.Group): Promise<void> {
+    if (!this.options.observation || !this.options.location) return;
     try {
       group.add(await createDeepSkyBackground(this.deepSpaceAssets, this.quality, this.options.observation, this.options.location));
       group.add(await createVolumetricNebulaGroup(this.deepSpaceAssets, this.quality, this.options.observation, this.options.location));
@@ -239,7 +284,7 @@ export class SkyApp {
     if (!this.solarSystemLayer) {
       const group = this.groups.get("solar-system")!;
       this.options.onStatus("Güneş sistemi hazırlanıyor...");
-      this.solarSystemLayer = new SolarSystemLayer(this.options.observation, this.quality);
+      this.solarSystemLayer = new SolarSystemLayer(this.options.observation ?? this.fallbackObservation, this.quality);
       group.add(this.solarSystemLayer.group);
       await this.solarSystemLayer.mount(this.camera, this.renderer.domElement);
       this.options.onStatus("Güneş sistemi hazır");
@@ -256,6 +301,11 @@ export class SkyApp {
     this.options.onStatus("Samanyolu hazırlanıyor...");
     try {
       group.add(createMilkyWayInteriorLayer(this.quality));
+      this.tileManager = new TileManager(this.quality);
+      group.add(this.tileManager.group);
+      void this.tileManager.mount().catch((error) => {
+        console.warn("[tiles] Progressive tile manifest unavailable.", error);
+      });
       group.add(this.createSpriteLabel(
         "Samanyolu içi temsili görünüm — Güneş, galaktik merkezden ~26.000 ışık yılı uzaktadır.",
         new THREE.Vector3(0, 0.68, 0), "#dbe7ff", 0.52
@@ -332,6 +382,7 @@ export class SkyApp {
   }
 
   private createSkyHitboxes(): void {
+    if (!this.options.observation || !this.options.location) return;
     const starMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
     for (const star of this.brightStars) {
       const seg = { name: "", from: [star.ra, star.dec], to: [star.ra, star.dec] } as any;
@@ -352,9 +403,12 @@ export class SkyApp {
     });
     
     for (const [name, segments] of map.entries()) {
+      if (!this.options.observation || !this.options.location) continue;
+      const observation = this.options.observation;
+      const location = this.options.location;
       const positions = new Float32Array(segments.length * 2 * 3);
       segments.forEach((segment, index) => {
-        const [from, to] = constellationSegmentToVectors(segment, this.options.observation.utcDate, this.options.location);
+        const [from, to] = constellationSegmentToVectors(segment, observation.utcDate, location);
         positions.set(from.map((v) => v * SKY_RADIUS), index * 6);
         positions.set(to.map((v) => v * SKY_RADIUS), index * 6 + 3);
       });
@@ -388,6 +442,7 @@ export class SkyApp {
   }
 
   private addSolarLabels(group: THREE.Group): void {
+    if (!this.options.observation || !this.options.location) return;
     const objects = computeSolarSystemObjects(this.options.observation.utcDate, this.options.location)
       .filter((o) => o.altitude > -10);
     objects.forEach((object) => {
@@ -571,7 +626,7 @@ export class SkyApp {
         return;
       }
 
-      if (this.activeLayer === "sky" && isClick) {
+      if ((this.activeLayer === "sky" || this.activeLayer === "stars" || this.activeLayer === "constellations") && isClick) {
         const ndc = new THREE.Vector2(
           (event.clientX / this.renderer.domElement.clientWidth) * 2 - 1,
           -(event.clientY / this.renderer.domElement.clientHeight) * 2 + 1
@@ -581,7 +636,8 @@ export class SkyApp {
         const skyGroup = this.groups.get("sky");
         const constGroup = skyGroup?.children.find(c => c.children.length > 0 && c.children[0] instanceof THREE.LineSegments);
         const targets = [...this.interactiveSkyGroup.children];
-        if (constGroup) targets.push(...constGroup.children);
+        if (this.activeLayer !== "stars" && constGroup) targets.push(...constGroup.children);
+        if (this.activeLayer === "constellations") targets.splice(0, this.interactiveSkyGroup.children.length);
 
         const intersects = this.raycaster.intersectObjects(targets, false);
         
@@ -595,11 +651,11 @@ export class SkyApp {
         let found = false;
         for (const hit of intersects) {
           const ud = hit.object.userData;
-          if (ud.type === "star") {
+          if (ud.type === "star" && this.activeLayer !== "constellations") {
             this.options.onPlanetInfo?.({ type: "star", ...ud.info });
             found = true;
             break;
-          } else if (ud.type === "constellation") {
+          } else if (ud.type === "constellation" && this.activeLayer !== "stars") {
             if (ud.info) {
               this.options.onPlanetInfo?.({ type: "constellation", ...ud.info });
               // Highlight
@@ -611,6 +667,17 @@ export class SkyApp {
           }
         }
         if (!found) this.options.onPlanetInfo?.(null);
+      }
+
+      if (this.activeLayer === "milky-way" && isClick) {
+        const ndc = new THREE.Vector2(
+          (event.clientX / this.renderer.domElement.clientWidth) * 2 - 1,
+          -(event.clientY / this.renderer.domElement.clientHeight) * 2 + 1
+        );
+        this.raycaster.setFromCamera(ndc, this.camera);
+        const hits = this.raycaster.intersectObjects(this.groups.get("milky-way")?.children ?? [], true);
+        const target = hits.find((hit) => hit.object.userData?.type === "black-hole" || hit.object.userData?.type === "nebula");
+        this.options.onPlanetInfo?.(target ? target.object.userData : null);
       }
 
       this.activePointers.delete(event.pointerId);
@@ -625,7 +692,7 @@ export class SkyApp {
     canvas.addEventListener("wheel", (event) => {
       event.preventDefault(); // Her zaman sayfa kaydırmayı engelle
       if (this.activeLayer === "solar-system") return; // OrbitControls zoom
-      if (this.activeLayer === "sky") {
+      if (this.activeLayer === "sky" || this.activeLayer === "stars" || this.activeLayer === "constellations") {
         this.targetFov = THREE.MathUtils.clamp(this.targetFov + Math.sign(event.deltaY) * 4, 28, 82);
         return;
       }
@@ -661,6 +728,10 @@ export class SkyApp {
     this.solarSystemLayer?.setAnimationEnabled(enabled);
   }
 
+  setAstrologyEnabled(enabled: boolean): void {
+    this.options.astrologyEnabled = enabled;
+  }
+
   resetSolarSystemView(): void {
     this.solarSystemLayer?.resetFocus();
     this.options.onPlanetInfo?.(null);
@@ -682,7 +753,7 @@ export class SkyApp {
     this.rotation.lerp(this.targetRotation, 0.08);
     const group = this.groups.get(this.activeLayer);
 
-    if (this.activeLayer === "sky") {
+    if (this.activeLayer === "sky" || this.activeLayer === "stars" || this.activeLayer === "constellations") {
       // Çok yavaş otomatik drift — sinematik his
       this.driftAngle += deltaSeconds * 0.00008;
       this.camera.position.set(0, 0.02, 0);
@@ -706,6 +777,7 @@ export class SkyApp {
     this.solarSystemLayer?.update(deltaSeconds);
     // Güneş yüzey shader zamanı
     this.solarSystemLayer?.updateSunTime(now / 1000);
+    this.tileManager?.update(this.camera);
 
     // Render — bloom varsa composer, yoksa direkt
     if (this.composer && this.quality.name !== "low") {
@@ -716,4 +788,8 @@ export class SkyApp {
 
     this.qualityController.sampleFrame();
   };
+
+  private canMountLocalSky(): boolean {
+    return Boolean(this.options.observation && this.options.location);
+  }
 }

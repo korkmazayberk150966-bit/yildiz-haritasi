@@ -1,9 +1,10 @@
 import type { QualityProfile } from "../types";
 
 export function detectInitialQuality(): QualityProfile {
-  const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 4;
-  const cores = navigator.hardwareConcurrency ?? 4;
-  const dpr = window.devicePixelRatio || 1;
+  const nav = typeof navigator === "undefined" ? undefined : navigator as Navigator & { deviceMemory?: number };
+  const memory = nav?.deviceMemory ?? 4;
+  const cores = nav?.hardwareConcurrency ?? 4;
+  const dpr = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
   const low = memory <= 2 || cores <= 4 || dpr > 2.5;
   const high = memory >= 8 && cores >= 8 && dpr <= 2;
 
@@ -17,7 +18,12 @@ export function detectInitialQuality(): QualityProfile {
       antialias: false,
       skyTextureTier: "4k",
       deepSpaceSpriteLimit: 220,
-      useHeroSprites: true
+      useHeroSprites: true,
+      cinematicEffects: "off",
+      streamingBudgetMb: 48,
+      maxActiveTiles: 8,
+      raymarchEnabled: false,
+      blackHoleEffectEnabled: false
     };
   }
   if (high) {
@@ -30,7 +36,12 @@ export function detectInitialQuality(): QualityProfile {
       antialias: true,
       skyTextureTier: "8k",
       deepSpaceSpriteLimit: 900,
-      useHeroSprites: true
+      useHeroSprites: true,
+      cinematicEffects: "full",
+      streamingBudgetMb: 160,
+      maxActiveTiles: 28,
+      raymarchEnabled: true,
+      blackHoleEffectEnabled: true
     };
   }
   return {
@@ -42,7 +53,12 @@ export function detectInitialQuality(): QualityProfile {
     antialias: true,
     skyTextureTier: "4k",
     deepSpaceSpriteLimit: 520,
-    useHeroSprites: true
+    useHeroSprites: true,
+    cinematicEffects: "reduced",
+    streamingBudgetMb: 96,
+    maxActiveTiles: 16,
+    raymarchEnabled: false,
+    blackHoleEffectEnabled: false
   };
 }
 
@@ -73,7 +89,12 @@ export class AdaptiveQualityController {
       antialias: false,
       skyTextureTier: "4k",
       deepSpaceSpriteLimit: Math.min(this.profile.deepSpaceSpriteLimit, 220),
-      useHeroSprites: true
+      useHeroSprites: true,
+      cinematicEffects: "off",
+      streamingBudgetMb: 48,
+      maxActiveTiles: 8,
+      raymarchEnabled: false,
+      blackHoleEffectEnabled: false
     };
     this.onChange(this.profile);
   }

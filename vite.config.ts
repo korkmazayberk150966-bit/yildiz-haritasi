@@ -10,7 +10,7 @@ export default defineConfig({
       manifest: {
         name: "Gökkubbe",
         short_name: "Gökkubbe",
-        description: "Doğum anına göre çalışan bilimsel ve etkileşimli gökyüzü deneyimi.",
+        description: "Sinematik serbest gezi ve doğum anına göre yerel gökyüzü deneyimi.",
         theme_color: "#050712",
         background_color: "#050712",
         display: "standalone",
@@ -25,7 +25,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,bin,json,woff2}"],
-        globIgnores: ["**/textures/deep-space/**"],
+        globIgnores: ["**/textures/deep-space/**", "**/tiles/**"],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.includes("/textures/deep-space/"),
@@ -34,6 +34,20 @@ export default defineConfig({
               cacheName: "deep-space-runtime-v1",
               expiration: {
                 maxEntries: 8,
+                maxAgeSeconds: 60 * 60 * 24 * 14
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: ({ url }) => url.pathname.includes("/tiles/"),
+            handler: "CacheFirst",
+            options: {
+              cacheName: "space-tiles-runtime-v1",
+              expiration: {
+                maxEntries: 36,
                 maxAgeSeconds: 60 * 60 * 24 * 14
               },
               cacheableResponse: {

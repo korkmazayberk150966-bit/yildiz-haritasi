@@ -11,7 +11,8 @@
     "data:hyg": "tsx data/build-hyg.ts",
     "data:planets": "tsx data/download-planet-textures.ts",
     "data:deep-space": "tsx data/build-deep-space-assets.ts",
-    "data:astro-glossary": "tsx data/build-astro-glossary.ts"
+    "data:astro-glossary": "tsx data/build-astro-glossary.ts",
+    "data:sample-tiles": "tsx data/build-sample-tiles.ts"
   },
   "dependencies": {
     "@turf/turf": "^7.2.0",
