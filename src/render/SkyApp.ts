@@ -369,9 +369,9 @@ export class SkyApp {
       // Threshold yüksek → galaksi parçacıkları beyaza doymuyor
       const bloom = new UnrealBloomPass(
         new THREE.Vector2(clientWidth, clientHeight),
-        this.quality.name === "high" ? 0.18 : 0.12,  // strength — belirgin azaltıldı
-        0.35,   // radius — küçük halo, lens artefaktı yok
-        0.90    // threshold — yalnızca çok parlak çekirdekler
+        this.quality.name === "high" ? 0.16 : 0.10,
+        0.26,
+        1.14
       );
       composer.addPass(bloom);
       this.composer = composer;
@@ -772,6 +772,7 @@ export class SkyApp {
     for (const material of this.starMaterials) {
       material.uniforms.uTime.value = now / 1000;
     }
+    this.updateMilkyWayAnimatedMaterials(now / 1000);
 
     this.rotation.lerp(this.targetRotation, 0.08);
     const group = this.groups.get(this.activeLayer);
@@ -828,5 +829,16 @@ export class SkyApp {
       this.camera.position.distanceTo(SUN_START),
       this.camera.position.distanceTo(GALACTIC_CENTER)
     );
+  }
+
+  private updateMilkyWayAnimatedMaterials(time: number): void {
+    const group = this.groups.get("milky-way");
+    if (!group || !this.milkyWayMounted) return;
+    group.traverse((object) => {
+      const material = (object as THREE.Points).material;
+      if (!material || Array.isArray(material)) return;
+      const shader = material as THREE.ShaderMaterial;
+      if (shader.uniforms?.uTime) shader.uniforms.uTime.value = time;
+    });
   }
 }

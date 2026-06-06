@@ -23,7 +23,14 @@ export function detectInitialQuality(): QualityProfile {
       streamingBudgetMb: 48,
       maxActiveTiles: 8,
       raymarchEnabled: false,
-      blackHoleEffectEnabled: false
+      blackHoleEffectEnabled: false,
+      milkyWayGlowQuality: "basic",
+      dustQuality: "basic",
+      nebulaQuality: "particle",
+      heroStarLimit: 4,
+      postFxLevel: "basic",
+      raymarchStepCap: 0,
+      halfResNebula: true
     };
   }
   if (high) {
@@ -41,7 +48,14 @@ export function detectInitialQuality(): QualityProfile {
       streamingBudgetMb: 160,
       maxActiveTiles: 28,
       raymarchEnabled: true,
-      blackHoleEffectEnabled: true
+      blackHoleEffectEnabled: true,
+      milkyWayGlowQuality: "volumetric",
+      dustQuality: "high",
+      nebulaQuality: "raymarch",
+      heroStarLimit: 18,
+      postFxLevel: "cinematic",
+      raymarchStepCap: 36,
+      halfResNebula: true
     };
   }
   return {
@@ -58,7 +72,14 @@ export function detectInitialQuality(): QualityProfile {
     streamingBudgetMb: 96,
     maxActiveTiles: 16,
     raymarchEnabled: false,
-    blackHoleEffectEnabled: false
+    blackHoleEffectEnabled: false,
+    milkyWayGlowQuality: "layered",
+    dustQuality: "layered",
+    nebulaQuality: "billboard",
+    heroStarLimit: 10,
+    postFxLevel: "polished",
+    raymarchStepCap: 14,
+    halfResNebula: true
   };
 }
 
@@ -94,7 +115,14 @@ export class AdaptiveQualityController {
       streamingBudgetMb: 48,
       maxActiveTiles: 8,
       raymarchEnabled: false,
-      blackHoleEffectEnabled: false
+      blackHoleEffectEnabled: false,
+      milkyWayGlowQuality: "basic",
+      dustQuality: "basic",
+      nebulaQuality: "particle",
+      heroStarLimit: 4,
+      postFxLevel: "basic",
+      raymarchStepCap: 0,
+      halfResNebula: true
     };
     this.onChange(this.profile);
   }

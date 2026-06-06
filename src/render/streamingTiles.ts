@@ -134,7 +134,7 @@ export class TileManager {
         type: entry.kind,
         info: {
           name: entry.kind === "dust" ? "Yerel Toz Bulutu" : "Yıldız Alanı",
-          desc: "Progressive streaming MVP tile verisi. Büyük bilimsel veri setleri için aynı sözleşme kullanılacak.",
+          desc: "Prosedürel/temsili progressive streaming MVP tile verisi. Büyük bilimsel veri setleri için aynı sözleşme sonraki ETL fazında kullanılacak.",
           tileId: entry.id
         }
       };

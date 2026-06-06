@@ -45,6 +45,13 @@ export interface QualityProfile {
   maxActiveTiles: number;
   raymarchEnabled: boolean;
   blackHoleEffectEnabled: boolean;
+  milkyWayGlowQuality: "basic" | "layered" | "volumetric";
+  dustQuality: "basic" | "layered" | "high";
+  nebulaQuality: "particle" | "billboard" | "raymarch";
+  heroStarLimit: number;
+  postFxLevel: "basic" | "polished" | "cinematic";
+  raymarchStepCap: number;
+  halfResNebula: boolean;
 }
 
 export interface RenderLayer {

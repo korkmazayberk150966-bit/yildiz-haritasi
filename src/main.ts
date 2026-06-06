@@ -458,20 +458,21 @@ function renderInfoPanel(info: any | null): void {
 
   if (info.type === "stars" || info.type === "dust" || info.type === "nebula") {
     const details = info.info ?? info;
+    const label = info.type === "dust" ? "Temsili Toz Katmanı" : info.type === "nebula" ? "Temsili Nebula Katmanı" : "Temsili Yıldız Katmanı";
     planetCard.innerHTML = `
       <div class="card-header">
         <span class="card-symbol" style="color:#9fb9ff;">✧</span>
         <div>
-          <p class="card-kicker">Streaming Tile</p>
+          <p class="card-kicker">${label}</p>
           <h2>${details.name}</h2>
         </div>
         <button class="panel-close" type="button" data-close-panel aria-label="Bilgi kartını kapat">×</button>
       </div>
       <div class="card-section card-meaning">
-        <p class="card-label">MVP Veri Katmanı</p>
+        <p class="card-label">Prosedürel Görsel</p>
         <p class="card-text">${details.desc}</p>
       </div>
-      <p class="card-disclaimer">Tile: ${details.tileId ?? "manifest"}</p>
+      <p class="card-disclaimer">Bu görsel katman bilimsel katalog iddiası taşımaz. ${details.tileId ? `Tile: ${details.tileId}` : ""}</p>
     `;
     planetCard.hidden = false;
     return;
