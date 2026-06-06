@@ -17,6 +17,12 @@ import type { PlanetInfo } from "./SolarSystemLayer";
 import { SolarSystemLayer } from "./SolarSystemLayer";
 import { createStarMaterial } from "./starMaterial";
 import { TileManager } from "./streamingTiles";
+import {
+  GALACTIC_CENTER,
+  MilkyWayFlightController,
+  SUN_START,
+  type FlightControlsElements
+} from "./MilkyWayFlightController";
 
 // Lazy-load postprocessing (bloom) — ilk pakete girmesin
 type Composer = { render(): void; setSize(w: number, h: number): void };
@@ -30,8 +36,10 @@ interface SkyAppOptions {
   onLayerChange: (layer: LayerId) => void;
   onStatus: (status: string) => void;
   onSolarSystemReady?: (ready: boolean) => void;
+  onMilkyWayFlightActive?: (active: boolean) => void;
   onNeedsAstrologyInput?: () => void;
   onPlanetInfo: (info: PlanetInfo | Record<string, unknown> | null) => void;
+  flightControls?: FlightControlsElements;
 }
 
 const LAYERS: LayerId[] = ["sky", "stars", "constellations", "solar-system", "milky-way", "cosmic-web"];
@@ -77,6 +85,7 @@ export class SkyApp {
   private composer?: Composer;
   private driftAngle = 0; // kamera sürüklenme açısı
   private tileManager?: TileManager;
+  private milkyWayFlight: MilkyWayFlightController;
   private fallbackObservation: ObservationTime = {
     localDateTime: new Date().toISOString(),
     utcDate: new Date(),
@@ -101,6 +110,7 @@ export class SkyApp {
     this.options.container.appendChild(this.renderer.domElement);
     this.createLayerGroups();
     this.bindControls();
+    this.milkyWayFlight = new MilkyWayFlightController(this.camera, this.renderer.domElement, this.options.flightControls);
     this.resize();
   }
 
@@ -134,6 +144,8 @@ export class SkyApp {
     for (const [id, group] of this.groups) group.visible = id === visibleGroup;
     this.zoom = layer === "milky-way" ? 1.25 : layer === "cosmic-web" ? 3.6 : LAYERS.indexOf(layer) + 1;
     this.options.onLayerChange(layer);
+    this.milkyWayFlight.setEnabled(layer === "milky-way");
+    this.options.onMilkyWayFlightActive?.(layer === "milky-way");
 
     if (layer === "sky" || layer === "stars" || layer === "constellations") {
       const status = layer === "stars"
@@ -156,8 +168,8 @@ export class SkyApp {
     } else {
       this.options.onSolarSystemReady?.(false);
       this.options.onPlanetInfo?.(null);
-      this.camera.position.set(0, 0, 2.25);
-      this.camera.fov = 65;
+      if (layer !== "milky-way") this.camera.position.set(0, 0, 2.25);
+      this.camera.fov = layer === "milky-way" ? 68 : 65;
       this.camera.updateProjectionMatrix();
       this.solarSystemLayer?.disableControls();
     }
@@ -183,6 +195,7 @@ export class SkyApp {
     cancelAnimationFrame(this.animation);
     this.solarSystemLayer?.dispose();
     this.tileManager?.dispose();
+    this.milkyWayFlight.dispose();
     this.renderer.dispose();
     this.options.container.replaceChildren();
   }
@@ -580,6 +593,8 @@ export class SkyApp {
       // Her modda click tespiti için kaydet
       this.pointerDownAt = new THREE.Vector2(event.clientX, event.clientY);
 
+      if (this.activeLayer === "milky-way") return;
+
       // Solar system: OrbitControls tam kontrolü alır, biz sadece click tespiti yaparız
       if (this.activeLayer === "solar-system") return;
 
@@ -592,6 +607,7 @@ export class SkyApp {
     canvas.addEventListener("pointermove", (event) => {
       // Solar system: OrbitControls yönetir
       if (this.activeLayer === "solar-system") return;
+      if (this.activeLayer === "milky-way") return;
 
       this.activePointers.set(event.pointerId, new THREE.Vector2(event.clientX, event.clientY));
       if (this.activePointers.size === 2) {
@@ -676,8 +692,14 @@ export class SkyApp {
         );
         this.raycaster.setFromCamera(ndc, this.camera);
         const hits = this.raycaster.intersectObjects(this.groups.get("milky-way")?.children ?? [], true);
-        const target = hits.find((hit) => hit.object.userData?.type === "black-hole" || hit.object.userData?.type === "nebula");
-        this.options.onPlanetInfo?.(target ? target.object.userData : null);
+        const target = hits.find((hit) => {
+          const type = hit.object.userData?.type ?? hit.object.parent?.userData?.type;
+          return type === "black-hole" || type === "nebula" || type === "stars" || type === "dust";
+        });
+        const info = target
+          ? (target.object.userData?.type ? target.object.userData : target.object.parent?.userData ?? null)
+          : null;
+        this.options.onPlanetInfo?.(info);
       }
 
       this.activePointers.delete(event.pointerId);
@@ -692,6 +714,7 @@ export class SkyApp {
     canvas.addEventListener("wheel", (event) => {
       event.preventDefault(); // Her zaman sayfa kaydırmayı engelle
       if (this.activeLayer === "solar-system") return; // OrbitControls zoom
+      if (this.activeLayer === "milky-way") return;
       if (this.activeLayer === "sky" || this.activeLayer === "stars" || this.activeLayer === "constellations") {
         this.targetFov = THREE.MathUtils.clamp(this.targetFov + Math.sign(event.deltaY) * 4, 28, 82);
         return;
@@ -767,6 +790,13 @@ export class SkyApp {
     } else if (this.activeLayer === "solar-system") {
       // OrbitControls ve uçuş animasyonu SolarSystemLayer.update() içinde
 
+    } else if (this.activeLayer === "milky-way") {
+      this.milkyWayFlight.setNearbyDistance(this.nearestMilkyWayTargetDistance());
+      this.milkyWayFlight.update(deltaSeconds);
+      this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, 68, 0.08);
+      this.camera.updateProjectionMatrix();
+      if (group) group.rotation.set(0, 0, 0);
+
     } else if (group) {
       group.rotation.y = this.rotation.x;
       group.rotation.x = this.rotation.y;
@@ -791,5 +821,12 @@ export class SkyApp {
 
   private canMountLocalSky(): boolean {
     return Boolean(this.options.observation && this.options.location);
+  }
+
+  private nearestMilkyWayTargetDistance(): number {
+    return Math.min(
+      this.camera.position.distanceTo(SUN_START),
+      this.camera.position.distanceTo(GALACTIC_CENTER)
+    );
   }
 }

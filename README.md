@@ -42,7 +42,7 @@ Katman 2 gezegen render'ı da aynı kalite profiline bağlıdır. Düşük profi
 
 ## Serbest Gezi ve Tile Sözleşmesi
 
-Serbest Gezi modu `milky-way` katmanını varsayılan açar. Bu katman dışarıdan galaksi resmi değil, Güneş'in galaktik disk içindeki konumu çevresinden görülen temsili iç-galaksi sahnesidir. Yüksek kalite profilinde Sagittarius A* için billboard/shader tabanlı bir görsel hedef eklenir; tam raymarch/lensing sonraki veri fazına bırakılmıştır.
+Serbest Gezi modu `milky-way` katmanını varsayılan açar. Bu katmanda dışarıdan spiral disk gösterilmez; kamera Güneş çevresinde, galaktik diskin içinde başlar. Görsel temsil içeriden görülen yıldız alanı, Samanyolu bandı, toz şeritleri ve galaktik merkez parıltısıdır. Masaüstünde W/A/S/D veya oklar, Q/E ve Shift boost; mobilde joystick, bakış alanı, yukarı/aşağı ve boost kontrolleri kullanılır. Yüksek kalite profilinde Sagittarius A* için billboard/shader tabanlı bir görsel hedef eklenir; tam raymarch/lensing sonraki veri fazına bırakılmıştır.
 
 Streaming veri sözleşmesi `public/tiles/manifest.json` ile başlar. Her tile:
 
@@ -58,7 +58,7 @@ alanlarını taşır. Binary tile formatı MVP için `Float32Array` stride 8 şe
 npm run data:sample-tiles
 ```
 
-Varsayılan host GitHub Pages `public/tiles` dizinidir. İleride Edenhofer/Gaia ETL çıktıları aynı manifest sözleşmesine göre CDN veya bucket'a taşınabilir.
+Varsayılan host GitHub Pages `public/tiles` dizinidir. MVP sample tile'ları kamera çevresi, galaktik düzlem bandı ve toz lane dağılımı üretir; kuş bakışı spiral dağılımı üretmez. İleride Edenhofer/Gaia ETL çıktıları aynı manifest sözleşmesine göre CDN veya bucket'a taşınabilir.
 
 ## Katman 2 Doku Hatti
 

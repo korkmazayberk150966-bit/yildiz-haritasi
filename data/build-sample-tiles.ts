@@ -15,12 +15,12 @@ const outDir = join(process.cwd(), "public", "tiles");
 mkdirSync(outDir, { recursive: true });
 
 const entries: Entry[] = [
-  makeTile("root-stars", "stars", 0, 2200, 7.2, 0),
-  makeTile("root-dust", "dust", 0, 1200, 5.8, 1),
-  makeTile("near-arm-a", "stars", 1, 1800, 3.8, 2, 2.4),
-  makeTile("near-arm-b", "stars", 1, 1800, 3.8, 3, -2.4),
-  makeTile("dust-lane-a", "dust", 1, 900, 3.4, 4, 1.1),
-  makeTile("nebula-local", "nebula", 2, 520, 1.9, 5, -0.9)
+  makeTile("root-stars", "stars", 0, 2600, 14, 0, 0),
+  makeTile("root-dust", "dust", 0, 1500, 12, 1, -2),
+  makeTile("local-band-a", "stars", 1, 1900, 10, 2, -10),
+  makeTile("local-band-b", "stars", 1, 1900, 10, 3, -22),
+  makeTile("dust-lane-a", "dust", 1, 1100, 9, 4, -16),
+  makeTile("nebula-local", "nebula", 2, 720, 5, 5, -8)
 ];
 
 writeFileSync(
@@ -41,7 +41,7 @@ function makeTile(
   pointCount: number,
   radius: number,
   seed: number,
-  offsetX = 0
+  zCenter = 0
 ): Entry {
   const rng = mulberry32(0x515100 + seed);
   const floats = new Float32Array(pointCount * 8);
@@ -49,12 +49,14 @@ function makeTile(
   const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
 
   for (let i = 0; i < pointCount; i++) {
-    const angle = rng() * Math.PI * 2;
-    const arm = Math.sin(angle * 2.2 + seed) * 0.65;
-    const r = Math.pow(rng(), 0.72) * radius;
-    const x = Math.cos(angle) * r + offsetX + arm;
-    const y = (rng() - 0.5) * (kind === "dust" ? 0.42 : 0.24);
-    const z = Math.sin(angle) * r + Math.cos(angle * 3.0) * 0.25;
+    const banded = rng() < (kind === "dust" ? 0.86 : 0.74);
+    const forward = (rng() - 0.5) * radius;
+    const laneOffset = kind === "dust" ? (rng() < 0.5 ? -0.7 : 0.7) : 0;
+    const x = (rng() - 0.5) * radius * (banded ? 1.6 : 2.4) + Math.sin((forward + zCenter) * 0.16) * 1.4;
+    const y = banded
+      ? laneOffset + (rng() - 0.5) * (kind === "dust" ? 0.62 : 0.42)
+      : (rng() - 0.5) * radius * 0.65;
+    const z = zCenter + forward;
     const warmth = kind === "dust" ? 0.78 + rng() * 0.18 : 0.86 + rng() * 0.14;
     const blue = kind === "dust" ? 0.42 + rng() * 0.18 : 0.76 + rng() * 0.2;
     const offset = i * 8;

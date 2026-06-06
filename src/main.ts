@@ -69,7 +69,33 @@ app.innerHTML = `
         <button class="secondary compact" id="anim-toggle" hidden>Zaman</button>
         <button class="secondary compact" id="reset-view" hidden>Tümünü sığdır</button>
       </div>
+      <div class="flight-hud" id="flight-hud" hidden>
+        <div class="hud-cell">
+          <span>Konum</span>
+          <strong id="flight-region">Güneş Çevresi</strong>
+        </div>
+        <div class="hud-compass" aria-label="Galaktik merkez yönü">
+          <span id="center-arrow">▲</span>
+          <small>Sgr A*</small>
+        </div>
+        <div class="hud-cell">
+          <span>Hız</span>
+          <strong id="flight-speed">0 ly/sn</strong>
+        </div>
+        <p class="flight-hint" id="flight-hint">Gezmek için sürükle / W A S D veya yön tuşlarını kullan. Shift ile boost.</p>
+      </div>
       <aside class="planet-card" id="planet-card" hidden></aside>
+      <div class="mobile-flight-controls" id="mobile-flight-controls" hidden aria-label="Samanyolu uçuş kontrolleri">
+        <div class="flight-joystick" id="flight-joystick" aria-label="İleri geri ve sağ sol hareket">
+          <span></span>
+        </div>
+        <div class="look-pad" id="look-pad" aria-label="Bakışı döndürme alanı"></div>
+        <div class="vertical-buttons">
+          <button type="button" id="flight-up" aria-label="Yukarı çık">Yukarı</button>
+          <button type="button" id="flight-down" aria-label="Aşağı in">Aşağı</button>
+        </div>
+        <button type="button" class="boost-button" id="flight-boost" aria-label="Hızlan">Boost</button>
+      </div>
       <nav class="layers" aria-label="Katmanlar">
         <button data-layer="sky">Gökyüzü</button>
         <button data-layer="stars">Yıldızlar</button>
@@ -137,6 +163,8 @@ const planetCard = document.querySelector<HTMLElement>("#planet-card")!;
 const loadingOverlay = document.querySelector<HTMLElement>("#loading-overlay")!;
 const astroPanel = document.querySelector<HTMLElement>("#astro-panel")!;
 const astroToggle = document.querySelector<HTMLInputElement>("#astro-toggle")!;
+const flightHud = document.querySelector<HTMLElement>("#flight-hud")!;
+const mobileFlightControls = document.querySelector<HTMLElement>("#mobile-flight-controls")!;
 
 mountLandingScene();
 loadCities().catch((error) => {
@@ -301,8 +329,25 @@ async function startSkyApp(
         animToggle.classList.remove("active");
       }
     },
+    onMilkyWayFlightActive: (active) => {
+      flightHud.hidden = !active;
+      mobileFlightControls.hidden = !active;
+    },
     onNeedsAstrologyInput: () => openAstroPanel("Yerel gökyüzü için tarih, saat ve konum gerekir."),
-    onPlanetInfo: renderInfoPanel
+    onPlanetInfo: renderInfoPanel,
+    flightControls: {
+      hud: flightHud,
+      region: document.querySelector<HTMLElement>("#flight-region")!,
+      speed: document.querySelector<HTMLElement>("#flight-speed")!,
+      centerArrow: document.querySelector<HTMLElement>("#center-arrow")!,
+      hint: document.querySelector<HTMLElement>("#flight-hint")!,
+      mobileControls: mobileFlightControls,
+      joystick: document.querySelector<HTMLElement>("#flight-joystick")!,
+      lookPad: document.querySelector<HTMLElement>("#look-pad")!,
+      upButton: document.querySelector<HTMLElement>("#flight-up")!,
+      downButton: document.querySelector<HTMLElement>("#flight-down")!,
+      boostButton: document.querySelector<HTMLElement>("#flight-boost")!
+    }
   });
   await skyApp.mount();
   loadingOverlay.hidden = true;
