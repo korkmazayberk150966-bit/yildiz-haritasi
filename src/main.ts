@@ -1,6 +1,12 @@
 import "./styles.css";
 
 import { localBirthTimeToUtc, resolveLocation } from "./astro/time";
+import {
+  ASTRO_DISCLAIMER,
+  findGlossaryConstellation,
+  findGlossaryFixedStar,
+  findGlossarySignByName
+} from "./data/astro-glossary";
 import type { PlanetInfo } from "./render/SolarSystemLayer";
 import { SkyApp } from "./render/SkyApp";
 import type { BirthInput, LayerId, ResolvedLocation } from "./types";
@@ -221,6 +227,14 @@ async function startSky(input: BirthInput, location: ResolvedLocation): Promise<
       }
       
       if (info.type === "star") {
+        const fixedStar = findGlossaryFixedStar(String(info.name));
+        const fixedStarSection = fixedStar
+          ? `<div class="card-section card-meaning">
+              <p class="card-label">Sabit Yıldız Doğası</p>
+              <p class="card-value">${fixedStar.nature}</p>
+              <p class="card-text">${fixedStar.meaning}</p>
+            </div>`
+          : "";
         planetCard.innerHTML = `
           <div class="card-header">
             <span class="card-symbol" style="color:${info.colorDesc.includes('Mavi') ? '#9fb9e8' : info.colorDesc.includes('Sarı') ? '#ffe28a' : info.colorDesc.includes('Kırmızı') ? '#ff8a8a' : '#fff'}">★</span>
@@ -240,12 +254,25 @@ async function startSky(input: BirthInput, location: ResolvedLocation): Promise<
             <p class="card-label">Hakkında</p>
             <p class="card-text">${info.desc}</p>
           </div>
+          ${fixedStarSection}
+          <p class="card-disclaimer">${ASTRO_DISCLAIMER}</p>
         `;
         planetCard.hidden = false;
         return;
       }
 
       if (info.type === "constellation") {
+        const constellation = findGlossaryConstellation(String(info.name)) ?? findGlossaryConstellation(String(info.nameTR));
+        const sign = constellation?.signKey ? findGlossarySignByName(constellation.signKey) : undefined;
+        const constellationMeaning = constellation?.meaning ?? info.desc;
+        const brightestStar = constellation?.brightestStar ?? info.brightest;
+        const signSection = sign
+          ? `<div class="card-section card-meaning">
+              <p class="card-label">${sign.name} Burcu Bağlantısı</p>
+              <p class="card-keywords">${sign.symbol} ${sign.keyword} · ${sign.element} · ${sign.modality}</p>
+              <p class="card-text">${sign.meaning}</p>
+            </div>`
+          : "";
         planetCard.innerHTML = `
           <div class="card-header">
             <span class="card-symbol" style="color: #94b2e4;">✦</span>
@@ -256,13 +283,15 @@ async function startSky(input: BirthInput, location: ResolvedLocation): Promise<
             <button class="panel-close" type="button" data-close-panel aria-label="Bilgi kartını kapat">×</button>
           </div>
           <div class="card-grid">
-            <div class="card-section"><p class="card-label">Latince Adı</p><p class="card-value">${info.name} (${info.id})</p></div>
-            <div class="card-section"><p class="card-label">En Parlak Yıldızı</p><p class="card-value">${info.brightest}</p></div>
+            <div class="card-section"><p class="card-label">Latince Adı</p><p class="card-value">${constellation?.latin ?? info.name} (${info.id})</p></div>
+            <div class="card-section"><p class="card-label">En Parlak Yıldızı</p><p class="card-value">${brightestStar}</p></div>
           </div>
           <div class="card-section card-meaning">
             <p class="card-label">Mitolojik Anlamı</p>
-            <p class="card-text">${info.desc}</p>
+            <p class="card-text">${constellationMeaning}</p>
           </div>
+          ${signSection}
+          <p class="card-disclaimer">${ASTRO_DISCLAIMER}</p>
         `;
         planetCard.hidden = false;
         return;
@@ -296,7 +325,7 @@ async function startSky(input: BirthInput, location: ResolvedLocation): Promise<
         </div>
         ${aspectSection}
         ${generationalNote}
-        <p class="card-disclaimer">Astrolojik yorumlar eğlence ve ilham amaçlıdır.</p>
+        <p class="card-disclaimer">${ASTRO_DISCLAIMER}</p>
       `;
       planetCard.hidden = false;
     }

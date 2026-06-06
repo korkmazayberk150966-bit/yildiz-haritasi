@@ -6,6 +6,8 @@
 
 import { AngleFromSun, Body, Ecliptic, GeoVector } from "astronomy-engine";
 
+import { ASTRO_GLOSSARY, findGlossaryPlanetByName, type AstroAspect } from "../data/astro-glossary";
+
 // ─── Burç sistemi ─────────────────────────────────────────────────────────────
 
 const ZODIAC_SIGNS = [
@@ -49,22 +51,34 @@ export function getPlanetLongitude(body: Body, date: Date): number {
 // ─── Açı (Aspect) sistemi ────────────────────────────────────────────────────
 
 export interface Aspect {
+  key: string;
   name: string;
   nameTR: string;
   degrees: number;
   orb: number;
   tone: "güçlü" | "uyumlu" | "sert" | "hafif" | "uyumsuz";
+  meaning: string;
 }
 
-const ASPECTS: Aspect[] = [
-  { name: "Conjunction",  nameTR: "Kavuşum",           degrees: 0,   orb: 8, tone: "güçlü" },
-  { name: "Semi-sextile", nameTR: "Yarım Altmışlık",   degrees: 30,  orb: 2, tone: "hafif" },
-  { name: "Sextile",      nameTR: "Altmışlık",         degrees: 60,  orb: 5, tone: "uyumlu" },
-  { name: "Square",       nameTR: "Kare",               degrees: 90,  orb: 7, tone: "sert" },
-  { name: "Trine",        nameTR: "Üçgen",              degrees: 120, orb: 8, tone: "uyumlu" },
-  { name: "Quincunx",    nameTR: "Quincunx (İnconjunct)", degrees: 150, orb: 3, tone: "uyumsuz" },
-  { name: "Opposition",   nameTR: "Karşıt",             degrees: 180, orb: 8, tone: "sert" },
-];
+const ASPECT_EN_NAMES: Record<string, string> = {
+  "conjunction": "Conjunction",
+  "semi-sextile": "Semi-sextile",
+  "sextile": "Sextile",
+  "square": "Square",
+  "trine": "Trine",
+  "quincunx": "Quincunx",
+  "opposition": "Opposition"
+};
+
+const ASPECTS: Aspect[] = ASTRO_GLOSSARY.aspects.map((aspect) => ({
+  key: aspect.key,
+  name: ASPECT_EN_NAMES[aspect.key] ?? aspect.name,
+  nameTR: aspect.name,
+  degrees: aspect.angle,
+  orb: aspect.orb,
+  tone: mapAspectTone(aspect),
+  meaning: aspect.meaning
+}));
 
 export interface AspectResult {
   aspect: Aspect;
@@ -111,69 +125,16 @@ export interface PlanetMeaning {
 }
 
 export const PLANET_MEANINGS: Record<string, PlanetMeaning> = {
-  "Güneş": {
-    symbol: "☉",
-    shortMeaning: "Öz benlik ve yaşam enerjisi",
-    keywords: "kimlik · ego · amaç · canlılık",
-    fullMeaning: "Öz benlik, ego, yaşam enerjisi, kimlik ve amaç. \"Temelde kim olduğun.\" Canlılık ve özgüvenin kaynağı."
-  },
-  "Ay": {
-    symbol: "☽",
-    shortMeaning: "Duygular ve iç dünya",
-    keywords: "sezgi · ihtiyaçlar · bilinçaltı · şefkat",
-    fullMeaning: "Duygular, iç dünya, sezgi, ihtiyaçlar ve şefkat. \"Nasıl hissettiğin\" ve güvende hissetme biçimin; bilinçaltı ve içgüdüler."
-  },
-  "Merkür": {
-    symbol: "☿",
-    shortMeaning: "İletişim ve zihin",
-    keywords: "düşünce · öğrenme · konuşma · analiz",
-    fullMeaning: "İletişim, zihin, düşünme ve öğrenme. \"Nasıl düşünüp konuştuğun\"; bilgiyi işleme ve fikir alışverişi tarzın."
-  },
-  "Venüs": {
-    symbol: "♀",
-    shortMeaning: "Aşk, güzellik ve değerler",
-    keywords: "ilişkiler · çekim · estetik · zevk",
-    fullMeaning: "Aşk, güzellik, ilişkiler, zevkler ve değerler. \"Neyi ve nasıl sevdiğin\"; uyum, çekim ve estetik anlayışın."
-  },
-  "Mars": {
-    symbol: "♂",
-    shortMeaning: "Eylem, enerji ve tutku",
-    keywords: "cesaret · dürtü · mücadele · arzu",
-    fullMeaning: "Eylem, enerji, tutku, cesaret ve dürtü. \"Nasıl harekete geçtiğin\"; mücadele gücün, arzu ve öfkenin ifadesi."
-  },
-  "Jüpiter": {
-    symbol: "♃",
-    shortMeaning: "Genişleme, şans ve bilgelik",
-    keywords: "bolluk · iyimserlik · cömertlik · fırsat",
-    fullMeaning: "Genişleme, şans, bolluk, bilgelik ve iyimserlik. \"Nasıl büyüdüğün\"; inanç, cömertlik, fırsat ve felsefi bakış."
-  },
-  "Satürn": {
-    symbol: "♄",
-    shortMeaning: "Disiplin, sorumluluk ve olgunluk",
-    keywords: "sınırlar · sabır · yapı · hayat dersleri",
-    fullMeaning: "Disiplin, sorumluluk, sınırlar, zaman ve olgunluk. \"Kendini nasıl disipline ettiğin\"; yapı, sabır ve hayat dersleri."
-  },
-  "Uranüs": {
-    symbol: "♅",
-    shortMeaning: "Devrim, özgürlük ve yenilik",
-    keywords: "değişim · teknoloji · özgün düşünce",
-    fullMeaning: "Devrim, değişim, özgürlük ve yenilik. Beklenmedik dönüşümler, teknoloji ve özgün düşünce (kuşak gezegeni — toplumsal etkiler).",
-    isGenerational: true
-  },
-  "Neptün": {
-    symbol: "♆",
-    shortMeaning: "Hayaller, ilham ve ruhsallık",
-    keywords: "sezgi · sanat · idealler · illüzyon",
-    fullMeaning: "Hayaller, ilham, ruhsallık ve sezgi. İdealler, sanat, sınırların erimesi; bazen illüzyon ve kaçış (kuşak gezegeni).",
-    isGenerational: true
-  },
-  "Plüton": {
-    symbol: "♇",
-    shortMeaning: "Dönüşüm, güç ve yeniden doğuş",
-    keywords: "derinlik · içsel güç · yenilenme",
-    fullMeaning: "Dönüşüm, güç, yeniden doğuş ve derinlik. Yoğun değişim, içsel güç ve yenilenme (kuşak gezegeni).",
-    isGenerational: true
-  }
+  ...Object.fromEntries(ASTRO_GLOSSARY.planets.map((planet) => [
+    planet.name,
+    {
+      symbol: planet.symbol,
+      shortMeaning: planet.represents,
+      keywords: planet.keywords.join(" · "),
+      fullMeaning: planet.meaning,
+      isGenerational: planet.isGenerational
+    }
+  ]))
 };
 
 // Açı tonu → Türkçe UI metni
@@ -201,8 +162,23 @@ export function buildAspectText(
     return `Güneş ile belirgin bir açı oluşmuyor${raw}.`;
   }
   const { aspect, orb } = result;
-  const meaning = PLANET_MEANINGS[planetName];
-  const keyTheme = meaning?.keywords.split("·")[0].trim() ?? planetName;
+  const meaning = findGlossaryPlanetByName(planetName);
+  const keyTheme = meaning?.keywords[0] ?? planetName;
   const tone = aspectToneText(aspect.tone);
-  return `Güneş ile ${aspect.nameTR} (${aspect.degrees}°, sapma ${orb}°) yapıyor. ${aspect.tone === "güçlü" ? "Enerjiler birleşir ve güçlenir:" : aspect.tone === "sert" ? "Gerilim ve meydan okuma:" : aspect.tone === "uyumlu" ? "Akıcı ve destekleyici:" : aspect.tone === "hafif" ? "Hafif, fark edilmesi gereken bir ilişki:" : "Sürekli ayar gerektiren bir gerilim:"} ${keyTheme} teması, kimliğinle ${tone} harmanlanıyor.`;
+  return `Güneş ile ${aspect.nameTR} (${aspect.degrees}°, sapma ${orb}°) yapıyor. ${aspect.meaning} ${planetName} temasındaki ${keyTheme} enerjisi Güneş'le ${tone} ilişki kurar.`;
+}
+
+function mapAspectTone(aspect: AstroAspect): Aspect["tone"] {
+  switch (aspect.type) {
+    case "güçlü":
+      return "güçlü";
+    case "hafif":
+      return "hafif";
+    case "yumuşak":
+      return "uyumlu";
+    case "sert":
+      return "sert";
+    case "uyumsuz":
+      return "uyumsuz";
+  }
 }

@@ -54,6 +54,21 @@ npm run data:deep-space
 
 Script ana kaynak olarak celestial/J2000 koordinatlı, parlak Hipparcos/Tycho yıldızları ayrılmış `milkyway_2020_4k/8k.exr` dosyalarını hedefler. Bu yerel ortamda EXR decoder desteği yoksa otomatik olarak aynı SVS ürününün `milkyway_2020_4k_print.jpg` fallback'inden optimize WebP üretir. Büyük deep-space asset'leri PWA precache'e alınmaz; service worker bunları runtime cache ile sınırlı süre/sayıda saklar.
 
+## Astroloji Sözlüğü
+
+Analiz katmanı `src/data/astro-glossary.ts` içindeki gömülü sözlüğü kullanır. Bu veri 6 Haziran 2026'da Notion'daki “Gökkubbe — Astroloji Sözlüğü” sayfasından build-time olarak okunup yapılandırılmıştır; uygulama runtime'da Notion'a veya internete bağlanmaz.
+
+Notion'daki sözlük güncellenirse akış:
+
+```bash
+# Notion plugin ile sayfayı tekrar oku, ASTRO_GLOSSARY içeriğini güncelle.
+npm run data:astro-glossary
+npm test
+npm run build
+```
+
+`npm run data:astro-glossary` gömülü sözlüğün beklenen ana bölümlerini doğrular; Notion fetch işlemi bilinçli olarak runtime'a eklenmez.
+
 ## GitHub Pages
 
 Bu repo bir proje sayfası olarak `https://kullanici.github.io/yildiz-haritasi/` altında yayınlanacaksa varsayılan ayar hazırdır:
