@@ -14,7 +14,7 @@ export async function loadSkyStars(
   limit: number
 ): Promise<StarVertexData> {
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`Yildiz verisi yuklenemedi: ${response.status}`);
+  if (!response.ok) throw new Error(`Yıldız verisi yüklenemedi: ${response.status}`);
   const raw = new Float32Array(await response.arrayBuffer());
   const total = Math.floor(raw.length / 4);
   const count = Math.min(total, limit);

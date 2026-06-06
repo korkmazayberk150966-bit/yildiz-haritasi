@@ -1,12 +1,12 @@
 {
   "name": "Gökkubbe",
   "short_name": "Gökkubbe",
-  "description": "Etkileşimli Yıldız Haritası ve Güneş Sistemi",
+  "description": "Doğum anına göre çalışan bilimsel ve etkileşimli gökyüzü deneyimi.",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#05070f",
   "theme_color": "#05070f",
-  "orientation": "landscape",
+  "orientation": "any",
   "icons": [
     {
       "src": "logo.png",

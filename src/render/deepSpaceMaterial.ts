@@ -12,7 +12,7 @@ export function createDeepSkyMaterial(texture: THREE.Texture, location: Resolved
       uMap: { value: texture },
       uLatitude: { value: location.latitude * DEG2RAD },
       uLst: { value: lstDegrees * DEG2RAD },
-      uOpacity: { value: 0.92 }
+      uOpacity: { value: 0.62 }
     },
     vertexShader: `
       varying vec3 vDir;
@@ -59,12 +59,13 @@ export function createAtlasBillboardMaterial(texture: THREE.Texture, columns: nu
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
+    blending: THREE.NormalBlending,
     uniforms: {
       uMap: { value: texture },
       uColumns: { value: columns },
       uRows: { value: rows },
-      uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, 2) }
+      uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, 2) },
+      uOpacity: { value: 0.58 }
     },
     vertexShader: `
       uniform float uPixelRatio;
@@ -88,6 +89,7 @@ export function createAtlasBillboardMaterial(texture: THREE.Texture, columns: nu
       uniform sampler2D uMap;
       uniform float uColumns;
       uniform float uRows;
+      uniform float uOpacity;
       varying float vAtlasIndex;
       varying float vIntensity;
 
@@ -101,7 +103,7 @@ export function createAtlasBillboardMaterial(texture: THREE.Texture, columns: nu
         vec4 texel = texture2D(uMap, tileUv);
         // Yumuşak kenar geçişi — galaksi fotoğraflarına doğal his
         float edge = smoothstep(0.5, 0.28, d);
-        gl_FragColor = vec4(texel.rgb * vIntensity, texel.a * edge * vIntensity);
+        gl_FragColor = vec4(texel.rgb * vIntensity, texel.a * edge * vIntensity * uOpacity);
       }
     `
   });

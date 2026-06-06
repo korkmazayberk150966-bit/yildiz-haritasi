@@ -4,7 +4,7 @@
  * NOT: Astrolojik yorumlar eğlence/ilham amaçlıdır; bilimsel iddia değildir.
  */
 
-import { AngleFromSun, Body, EclipticLongitude } from "astronomy-engine";
+import { AngleFromSun, Body, Ecliptic, GeoVector } from "astronomy-engine";
 
 // ─── Burç sistemi ─────────────────────────────────────────────────────────────
 
@@ -42,7 +42,8 @@ export function longitudeToZodiac(longitude: number): ZodiacPosition {
  * Bir gezegen için geosentrik ekliptik boylamı hesaplar.
  */
 export function getPlanetLongitude(body: Body, date: Date): number {
-  return EclipticLongitude(body, date);
+  const vector = GeoVector(body === Body.Earth ? Body.Sun : body, date, true);
+  return Ecliptic(vector).elon;
 }
 
 // ─── Açı (Aspect) sistemi ────────────────────────────────────────────────────

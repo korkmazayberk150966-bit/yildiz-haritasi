@@ -214,7 +214,7 @@ export function createGalaxyMaterial(pixelRatio = 1): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
+    blending: THREE.NormalBlending,
     vertexColors: true,
     uniforms: {
       uPixelRatio: { value: pixelRatio }
@@ -231,7 +231,7 @@ export function createGalaxyMaterial(pixelRatio = 1): THREE.ShaderMaterial {
         vOpacity = aOpacity;
         vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
         float dist = max(0.1, -mvPos.z);
-        gl_PointSize = clamp(aSize * uPixelRatio * 280.0 / dist, 1.0, 64.0);
+        gl_PointSize = clamp(aSize * uPixelRatio * 230.0 / dist, 1.0, 48.0);
         gl_Position = projectionMatrix * mvPos;
       }
     `,
@@ -245,7 +245,7 @@ export function createGalaxyMaterial(pixelRatio = 1): THREE.ShaderMaterial {
         if (d > 0.5) discard;
         // Keskin çekirdek + yumuşak halo
         float core = smoothstep(0.5, 0.04, d);
-        float halo = exp(-d * d * 6.0) * 0.35;
+        float halo = exp(-d * d * 7.5) * 0.18;
         float alpha = clamp(core + halo, 0.0, 1.0) * vOpacity;
         gl_FragColor = vec4(vColor, alpha);
       }

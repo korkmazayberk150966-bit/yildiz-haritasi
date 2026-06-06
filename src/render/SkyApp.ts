@@ -27,7 +27,7 @@ interface SkyAppOptions {
   onLayerChange: (layer: LayerId) => void;
   onStatus: (status: string) => void;
   onSolarSystemReady?: (ready: boolean) => void;
-  onPlanetInfo: (info: any | null) => void;
+  onPlanetInfo: (info: PlanetInfo | Record<string, unknown> | null) => void;
 }
 
 const LAYERS: LayerId[] = ["sky", "solar-system", "milky-way", "cosmic-web"];
@@ -75,7 +75,7 @@ export class SkyApp {
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.88;
+    this.renderer.toneMappingExposure = 0.66;
     this.qualityController = new AdaptiveQualityController(this.quality, (profile) => this.applyQuality(profile));
     this.camera.position.set(0, 0.02, 0);
     this.renderer.setClearColor("#050712", 1);
@@ -91,7 +91,7 @@ export class SkyApp {
     await this.mountSkyLayer();
     this.setLayer("sky");
     this.animate();
-    this.options.onStatus("Hazır");
+    this.options.onStatus("Gökyüzü hazır");
 
     // Bloom'u arka planda yükle (initial pakete girmesin)
     void this.setupBloom();
@@ -270,7 +270,7 @@ export class SkyApp {
     if (this.cosmicMounted) return;
     this.cosmicMounted = true;
     const group = this.groups.get("cosmic-web")!;
-    this.options.onStatus("Evren katmanı hazırlanıyor...");
+    this.options.onStatus("Evren hazırlanıyor...");
     try {
       group.add(createCosmicGalaxyLayer(this.quality));
       group.add(this.createSpriteLabel(
@@ -281,7 +281,7 @@ export class SkyApp {
       console.warn("[deep-space] Cosmic fallback active.", error);
       this.mountPointCloudLayer("cosmic-web", this.quality.cosmicPointLimit, "#a8f7ff", 420);
     }
-    this.options.onStatus("Evren katmanı hazır");
+    this.options.onStatus("Evren hazır");
   }
 
   // ─── Bloom lazy-load ──────────────────────────────────────────────────────

@@ -8,13 +8,13 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["stars/hyg-stars.bin", "data/cities.json", "textures/planets/*"],
       manifest: {
-        name: "Yildiz Haritasi",
-        short_name: "Yildiz",
-        description: "Dogum ani icin offline calisan bilimsel gokyuzu haritasi.",
+        name: "Gökkubbe",
+        short_name: "Gökkubbe",
+        description: "Doğum anına göre çalışan bilimsel ve etkileşimli gökyüzü deneyimi.",
         theme_color: "#050712",
         background_color: "#050712",
         display: "standalone",
-        orientation: "portrait",
+        orientation: "any",
         icons: [
           {
             src: "icons/icon.svg",

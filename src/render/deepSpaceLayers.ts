@@ -102,7 +102,7 @@ export async function createVolumetricNebulaGroup(
   const pr = Math.min(window.devicePixelRatio || 1, 2);
 
   // Parçacık sayısı kaliteye göre
-  const pCount = quality.name === "low" ? 350 : quality.name === "medium" ? 1000 : 2800;
+  const pCount = quality.name === "low" ? 220 : quality.name === "medium" ? 650 : 1600;
 
   for (const item of manifest.nebulaAtlas.items as NebulaItem[]) {
     const horizontal = raDecToAltAz(item.ra, item.dec, observation.utcDate, location.latitude, location.longitude);
@@ -134,7 +134,7 @@ export async function createVolumetricNebulaGroup(
       innerColor,
       outerColor,
       particleCount: pCount,
-      baseOpacity: 0.18 * horizFade,
+      baseOpacity: 0.07 * horizFade,
       pixelRatio: pr
     });
     group.add(cloud);
@@ -152,7 +152,7 @@ export function createMilkyWayInteriorLayer(quality: QualityProfile): THREE.Grou
   const galaxyThickness = 0.14;
 
   // Parçacık sayıları
-  const totalParticles = quality.name === "low" ? 8000 : quality.name === "medium" ? 22000 : 55000;
+  const totalParticles = quality.name === "low" ? 6500 : quality.name === "medium" ? 18000 : 38000;
 
   const arrays = buildSpiralGalaxyArrays({
     center: new THREE.Vector3(0, 0, 0),
@@ -166,7 +166,7 @@ export function createMilkyWayInteriorLayer(quality: QualityProfile): THREE.Grou
     midColor: new THREE.Color("#ffe8c0"),     // kol beyazı
     outerColor: new THREE.Color("#8090ff"),   // dış disk soğuk mavi
     sizeScale: 1.0,
-    opacityScale: 0.35
+    opacityScale: 0.18
   });
 
   const pts = mergeGalaxyArraysToPoints([arrays], pr);
@@ -174,8 +174,8 @@ export function createMilkyWayInteriorLayer(quality: QualityProfile): THREE.Grou
 
   // Hacimsel toz nebulalar galaktik düzlemde
   if (quality.name !== "low") {
-    const nebulaCount = quality.name === "medium" ? 3 : 6;
-    const nebPCount = quality.name === "medium" ? 600 : 1800;
+    const nebulaCount = quality.name === "medium" ? 2 : 4;
+    const nebPCount = quality.name === "medium" ? 420 : 1100;
 
     for (let i = 0; i < nebulaCount; i++) {
       const angle = (i / nebulaCount) * Math.PI * 2 + Math.random() * 0.8;
@@ -200,7 +200,7 @@ export function createMilkyWayInteriorLayer(quality: QualityProfile): THREE.Grou
         innerColor: new THREE.Color(ic),
         outerColor: new THREE.Color(oc),
         particleCount: nebPCount,
-        baseOpacity: 0.20,
+        baseOpacity: 0.08,
         pixelRatio: pr
       });
       group.add(cloud);
@@ -219,10 +219,10 @@ export function createCosmicGalaxyLayer(quality: QualityProfile): THREE.Group {
   const pr = Math.min(window.devicePixelRatio || 1, 2);
 
   // LOD sayıları — kararına göre
-  const heroCount = quality.name === "low" ? 10 : quality.name === "medium" ? 18 : 25;
-  const bgCount   = quality.name === "low" ? 60 : quality.name === "medium" ? 180 : 420;
-  const heroParticles = quality.name === "low" ? 600 : quality.name === "medium" ? 1600 : 3200;
-  const bgParticles   = quality.name === "low" ? 40  : quality.name === "medium" ? 100  : 200;
+  const heroCount = quality.name === "low" ? 8 : quality.name === "medium" ? 14 : 20;
+  const bgCount   = quality.name === "low" ? 45 : quality.name === "medium" ? 130 : 280;
+  const heroParticles = quality.name === "low" ? 420 : quality.name === "medium" ? 1100 : 2200;
+  const bgParticles   = quality.name === "low" ? 28  : quality.name === "medium" ? 70  : 130;
 
   const allArrays: GalaxyParticleArrays[] = [];
 
@@ -257,7 +257,7 @@ export function createCosmicGalaxyLayer(quality: QualityProfile): THREE.Group {
 
     const colPalette = heroColors[i % heroColors.length];
     const sizeS = 1.8 * (1 - r / 180); // yakın → büyük
-    const opS   = 0.55 + (1 - r / 150) * 0.40;
+    const opS   = 0.34 + (1 - r / 150) * 0.22;
     const galRadius = 2.5 + rng() * 3.5;
 
     const arrays = buildSpiralGalaxyArrays({
@@ -272,7 +272,7 @@ export function createCosmicGalaxyLayer(quality: QualityProfile): THREE.Group {
       midColor:   new THREE.Color(colPalette[1]),
       outerColor: new THREE.Color(colPalette[2]),
       sizeScale: Math.max(0.3, sizeS),
-      opacityScale: Math.max(0.08, opS * 0.4)
+      opacityScale: Math.max(0.035, opS * 0.32)
     });
     allArrays.push(arrays);
   }
@@ -301,7 +301,7 @@ export function createCosmicGalaxyLayer(quality: QualityProfile): THREE.Group {
       color: bgPalettes[i % bgPalettes.length],
       particleCount: bgParticles,
       sizeScale: Math.max(0.15, 0.8 * (1 - r / 430)),
-      opacityScale: Math.max(0.04, 0.18 * (1 - r / 430))
+      opacityScale: Math.max(0.018, 0.095 * (1 - r / 430))
     });
     allArrays.push(blob);
   }

@@ -1,6 +1,6 @@
-# Yildiz Haritasi
+# Gökkubbe
 
-Mobil oncelikli, statik ve offline calisan bir astronomi PWA'si. Kullanici dogum tarihi, saati ve konumunu girer; uygulama o anki yerel gokyuzunu WebGL ile render eder.
+Mobil öncelikli, statik ve offline çalışan bir astronomi PWA'sı. Kullanıcı doğum tarihi, saati ve konumunu girer; uygulama o anki yerel gökyüzünü WebGL ile render eder.
 
 ## Kurulum
 
@@ -12,7 +12,7 @@ npm run data:deep-space
 npm run build
 ```
 
-HYG indirmesi icin ag erisimi yoksa gelistirme amacli kucuk ornek asset:
+HYG indirmesi için ağ erişimi yoksa geliştirme amaçlı küçük örnek asset:
 
 ```bash
 npx tsx data/build-hyg.ts --sample
@@ -21,61 +21,61 @@ npx tsx data/build-hyg.ts --sample
 ## Mimari
 
 - Vite + TypeScript + Three.js.
-- PWA cache ve manifest `vite-plugin-pwa` ile uretilir.
-- Gezegen, Gunes ve Ay konumlari runtime API kullanmadan `astronomy-engine` ile istemci tarafinda hesaplanir.
-- HYG v4.x CSV build asamasinda `Float32Array` binary asset'e donusturulur: `[RA, Dec, magnitude, B-V]`.
-- Yildizlar tekil mesh degil, `BufferGeometry + Points + ShaderMaterial` ile cizilir.
-- B-V renk indeksi shader icinde B-V -> Kelvin -> RGB blackbody yaklasimiyla renge donusur.
-- HYG koordinatlari J2000 epogundadir. Ciplak goz deneyimi icin dogum tarihiyle J2000 arasindaki presesyon farki ihmal edilebilir kabul edilir; gezegen konumlari tarihe gore `astronomy-engine` ile hesaplanir.
+- PWA cache ve manifest `vite-plugin-pwa` ile üretilir.
+- Gezegen, Güneş ve Ay konumları runtime API kullanmadan `astronomy-engine` ile istemci tarafında hesaplanır.
+- HYG v4.x CSV build aşamasında `Float32Array` binary asset'e dönüştürülür: `[RA, Dec, magnitude, B-V]`.
+- Yıldızlar tekil mesh değil, `BufferGeometry + Points + ShaderMaterial` ile çizilir.
+- B-V renk indeksi shader içinde B-V -> Kelvin -> RGB blackbody yaklaşımıyla renge dönüşür.
+- HYG koordinatları J2000 epoğundadır. Çıplak göz deneyimi için doğum tarihiyle J2000 arasındaki presesyon farkı ihmal edilebilir kabul edilir; gezegen konumları tarihe göre `astronomy-engine` ile hesaplanır.
 
 ## Adaptif Kalite
 
-Uygulama cihaz bellegi, cekirdek sayisi, pixel ratio ve kisa FPS olcumune gore kalite profili secer. Zayif cihazlarda pixel ratio ve point cloud limitleri otomatik duser. Katman 3 Gaia temsili ve Katman 4 kozmik ag icin sert ust sinirlar vardir; amac RAM/GPU tasmasini ve cokusu onlemektir.
+Uygulama cihaz belleği, çekirdek sayısı, pixel ratio ve kısa FPS ölçümüne göre kalite profili seçer. Zayıf cihazlarda pixel ratio ve point cloud limitleri otomatik düşer. Katman 3 Gaia temsili ve Katman 4 kozmik ağ için sert üst sınırlar vardır; amaç RAM/GPU taşmasını ve çöküşü önlemektir.
 
-Katman 2 gezegen render'i de ayni kalite profiline baglidir. Dusuk profilde kure segmentleri azalir; Dunya gece isiklari, bulut katmani ve atmosfer gibi ekstra draw-call/texture kullanan katmanlar kapatilir. Yuklenen dokular GPU'ya verilmeden once kalite profiline gore 512/1024/2048 px ust sinirina indirgenir. Gezegen doku asset'leri Katman 2 ilk acildiginda lazy yuklenir ve PWA cache'e dahil edilir.
+Katman 2 gezegen render'ı da aynı kalite profiline bağlıdır. Düşük profilde küre segmentleri azalır; Dünya gece ışıkları, bulut katmanı ve atmosfer gibi ekstra draw-call/texture kullanan katmanlar kapatılır. Yüklenen dokular GPU'ya verilmeden önce kalite profiline göre 512/1024/2048 px üst sınırına indirgenir. Gezegen doku asset'leri Katman 2 ilk açıldığında lazy yüklenir ve PWA cache'e dahil edilir.
 
 ## Katman 2 Doku Hatti
 
-Gercekci gezegen dokulari icin:
+Gerçekçi gezegen dokuları için:
 
 ```bash
 npm run data:planets
 ```
 
-Bu script JPL Solar System Simulator texture maps, NASA SVS Earth At Night ve NASA Visible Earth cloud map kaynaklarini `public/textures/planets/` altina indirir. Runtime'da NASA/JPL API veya uzak texture cagrisi yapilmaz.
+Bu script JPL Solar System Simulator texture maps, NASA SVS Earth At Night ve NASA Visible Earth cloud map kaynaklarını `public/textures/planets/` altına indirir. Runtime'da NASA/JPL API veya uzak texture çağrısı yapılmaz.
 
-## Fotogercekci Deep-Space Asset Hatti
+## Fotogerçekçi Deep-Space Asset Hattı
 
-Katman 1/3/4 icin NASA SVS Deep Star Maps 2020 ve NASA/Hubble atlaslarini uretmek:
+Katman 1/3/4 için NASA SVS Deep Star Maps 2020 ve NASA/Hubble atlaslarını üretmek:
 
 ```bash
 npm run data:deep-space
 ```
 
-Script ana kaynak olarak celestial/J2000 koordinatli, parlak Hipparcos/Tycho yildizlari ayrilmis `milkyway_2020_4k/8k.exr` dosyalarini hedefler. Bu yerel ortamda EXR decoder destegi yoksa otomatik olarak ayni SVS urununun `milkyway_2020_4k_print.jpg` fallback'inden optimize WebP uretir. Buyuk deep-space asset'leri PWA precache'e alinmaz; service worker bunlari runtime cache ile sinirli sure/sayida saklar.
+Script ana kaynak olarak celestial/J2000 koordinatlı, parlak Hipparcos/Tycho yıldızları ayrılmış `milkyway_2020_4k/8k.exr` dosyalarını hedefler. Bu yerel ortamda EXR decoder desteği yoksa otomatik olarak aynı SVS ürününün `milkyway_2020_4k_print.jpg` fallback'inden optimize WebP üretir. Büyük deep-space asset'leri PWA precache'e alınmaz; service worker bunları runtime cache ile sınırlı süre/sayıda saklar.
 
 ## GitHub Pages
 
-Bu repo bir proje sayfasi olarak `https://kullanici.github.io/yildiz-haritasi/` altinda yayinlanacaksa varsayilan ayar hazirdir:
+Bu repo bir proje sayfası olarak `https://kullanici.github.io/yildiz-haritasi/` altında yayınlanacaksa varsayılan ayar hazırdır:
 
 ```ts
 // vite.config.ts
 base: "/yildiz-haritasi/"
 ```
 
-Kok domain veya `https://kullanici.github.io/` icin yayinlayacaksan:
+Kök domain veya `https://kullanici.github.io/` için yayınlayacaksan:
 
 ```ts
 base: "/"
 ```
 
-Build ciktisi:
+Build çıktısı:
 
 ```bash
 npm run build
 ```
 
-`dist/` klasoru GitHub Pages'e verilir. Yanlis `base` ayari asset 404 hatalarina ve bos sayfaya neden olur.
+`dist/` klasörü GitHub Pages'e verilir. Yanlış `base` ayarı asset 404 hatalarına ve boş sayfaya neden olur.
 
 ## Test
 
@@ -86,4 +86,4 @@ npm run build
 
 ## Durum
 
-Ilk surum Katman 1'i uretim kalitesinde hedefler. Katman 2-4 icin moduler render iskeleti ve adaptif nokta limitleri hazirdir; sonraki adim bu katmanlari daha zengin acik veri setleriyle doldurmaktir.
+İlk sürüm Katman 1'i üretim kalitesinde hedefler. Katman 2-4 için modüler render iskeleti ve adaptif nokta limitleri hazırdır; sonraki adım bu katmanları daha zengin açık veri setleriyle doldurmaktır.

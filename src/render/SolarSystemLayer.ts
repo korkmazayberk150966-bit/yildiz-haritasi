@@ -1,4 +1,4 @@
-import { AngleFromSun, Body, EclipticLongitude, HelioVector } from "astronomy-engine";
+import { Body, HelioVector } from "astronomy-engine";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import * as THREE from "three";
 
@@ -221,7 +221,7 @@ export class SolarSystemLayer {
     // Güneş açısı (Güneş için gösterme)
     let aspectText = "";
     if (spec.name !== "Güneş") {
-      const sunLon = EclipticLongitude(Body.Sun, date);
+      const sunLon = getPlanetLongitude(Body.Sun, date);
       const aspect = findAspect(lon, sunLon);
       aspectText = buildAspectText(spec.name, aspect, aspect ? undefined : Math.abs(lon - sunLon) % 360);
     }
@@ -369,7 +369,7 @@ export class SolarSystemLayer {
 
   private async createPlanet(spec: PlanetSpec): Promise<void> {
     const helioVec = HelioVector(spec.body, this.observation.utcDate);
-    const distanceAu = helioVec.Length();
+    const distanceAu = this.distanceFromEarthAu(spec.body);
     const orbitRadius = 0.56 + Math.log1p(helioVec.Length()) * 0.82;
     const startAngle = Math.atan2(helioVec.y, helioVec.x);
     const orbitSpeedRadPerDay = (2 * Math.PI) / spec.orbitalPeriodDays;
@@ -519,6 +519,17 @@ export class SolarSystemLayer {
         () => resolve(undefined)
       );
     });
+  }
+
+  private distanceFromEarthAu(body: Body): number {
+    if (body === Body.Earth) return 0;
+    const date = this.observation.utcDate;
+    const planet = HelioVector(body, date);
+    const earth = HelioVector(Body.Earth, date);
+    const dx = planet.x - earth.x;
+    const dy = planet.y - earth.y;
+    const dz = planet.z - earth.z;
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
   }
 
   private optimizeTexture(texture: THREE.Texture): THREE.Texture {

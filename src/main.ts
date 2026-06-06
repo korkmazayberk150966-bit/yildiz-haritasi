@@ -19,50 +19,59 @@ let cities: CityRecord[] = [];
 app.innerHTML = `
   <main class="shell">
     <section class="intro" id="intro">
-      <p class="eyebrow">Offline astronomi PWA</p>
-      <h1>Yildiz Haritasi</h1>
-      <p class="lead">Dogdugun an ve konum icin yerel gokyuzunu bilimsel, akici ve mobil oncelikli bir WebGL deneyimine cevir.</p>
+      <div class="intro-stars" aria-hidden="true"></div>
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <p class="eyebrow">Gökkubbe</p>
+          <h1>Gökkubbe</h1>
+        </div>
+      </div>
+      <p class="lead">Doğduğun anın gökyüzünü bilimsel konum hesaplarıyla yeniden gör. Yıldızlar, gezegenler ve Samanyolu aynı gökkubbenin içinde.</p>
       <form class="birth-form" id="birth-form">
-        <label>
-          <span>Dogum tarihi</span>
+        <label class="field">
+          <span>Doğum tarihi</span>
           <input name="date" type="date" required />
         </label>
-        <label>
-          <span>Dogum saati</span>
+        <label class="field">
+          <span>Doğum saati</span>
           <input name="time" type="time" value="21:00" />
         </label>
-        <label>
-          <span>Sehir ara</span>
-          <input name="city" list="city-list" autocomplete="off" placeholder="Istanbul, Ankara, Izmir..." />
+        <label class="field">
+          <span>Şehir ara</span>
+          <input name="city" list="city-list" autocomplete="off" placeholder="İstanbul, Ankara, İzmir..." />
           <datalist id="city-list"></datalist>
         </label>
-        <div class="grid">
-          <label>
-            <span>Enlem</span>
-            <input name="latitude" type="number" step="0.0001" required />
-          </label>
-          <label>
-            <span>Boylam</span>
-            <input name="longitude" type="number" step="0.0001" required />
-          </label>
-        </div>
+        <details class="advanced-coordinates">
+          <summary>Gelişmiş / koordinatları gir</summary>
+          <div class="grid">
+            <label class="field">
+              <span>Enlem</span>
+              <input name="latitude" type="number" step="0.0001" required />
+            </label>
+            <label class="field">
+              <span>Boylam</span>
+              <input name="longitude" type="number" step="0.0001" required />
+            </label>
+          </div>
+        </details>
         <div class="actions">
           <button type="button" class="secondary" id="geo">Konumumu kullan</button>
-          <button type="submit">Gokyuzunu Olustur</button>
+          <button type="submit">Gökyüzünü oluştur</button>
         </div>
-        <p class="status" id="form-status">Ilk yuklemeden sonra veri ve uygulama offline acilir.</p>
+        <p class="status" id="form-status">İlk yüklemeden sonra uygulama ve temel gökyüzü verileri offline açılır.</p>
       </form>
     </section>
     <section class="viewer" id="viewer" hidden>
       <div class="canvas-wrap" id="canvas-wrap"></div>
       <div class="loading-overlay" id="loading-overlay" hidden>
         <div class="loader-ring"></div>
-        <p>Gokyuzu hazirlaniyor</p>
+        <p>Gökyüzü hazırlanıyor</p>
       </div>
       <div class="topbar">
         <button class="secondary" id="back">Yeni tarih</button>
         <p id="scene-status">Hazırlanıyor...</p>
-        <button class="secondary compact" id="anim-toggle" hidden>▶ Zaman</button>
+        <button class="secondary compact" id="anim-toggle" hidden>Zaman</button>
         <button class="secondary compact" id="reset-view" hidden>Tümünü sığdır</button>
       </div>
       <aside class="planet-card" id="planet-card" hidden></aside>
@@ -89,12 +98,12 @@ const planetCard = document.querySelector<HTMLElement>("#planet-card")!;
 const loadingOverlay = document.querySelector<HTMLElement>("#loading-overlay")!;
 
 loadCities().catch((error) => {
-  statusEl.textContent = error instanceof Error ? error.message : "Sehir verisi yuklenemedi.";
+  statusEl.textContent = error instanceof Error ? error.message : "Şehir verisi yüklenemedi.";
 });
 
 document.querySelector<HTMLButtonElement>("#geo")!.addEventListener("click", () => {
   if (!navigator.geolocation) {
-    statusEl.textContent = "Bu tarayici Geolocation API desteklemiyor.";
+    statusEl.textContent = "Bu tarayıcı konum özelliğini desteklemiyor.";
     return;
   }
   statusEl.textContent = "Konum izni bekleniyor...";
@@ -103,10 +112,10 @@ document.querySelector<HTMLButtonElement>("#geo")!.addEventListener("click", () 
       setInput("latitude", position.coords.latitude.toFixed(4));
       setInput("longitude", position.coords.longitude.toFixed(4));
       setInput("city", "Mevcut konum");
-      statusEl.textContent = "Konum alindi. Tarih ve saati kontrol edip devam edebilirsin.";
+      statusEl.textContent = "Konum alındı. Tarih ve saati kontrol edip devam edebilirsin.";
     },
     () => {
-      statusEl.textContent = "Konum izni reddedildi veya konum alinamadi.";
+      statusEl.textContent = "Konum izni reddedildi veya konum alınamadı.";
     },
     { enableHighAccuracy: false, timeout: 10000 }
   );
@@ -117,7 +126,7 @@ let animEnabled = false;
 animToggle.addEventListener("click", () => {
   animEnabled = !animEnabled;
   skyApp?.setSolarAnimation(animEnabled);
-  animToggle.textContent = animEnabled ? "⏸ Dondur" : "▶ Zaman";
+  animToggle.textContent = animEnabled ? "Dondur" : "Zaman";
   animToggle.classList.toggle("active", animEnabled);
 });
 
@@ -131,6 +140,13 @@ document.querySelector<HTMLButtonElement>("#back")!.addEventListener("click", ()
 resetView.addEventListener("click", () => {
   skyApp?.resetSolarSystemView();
   planetCard.hidden = true;
+});
+
+planetCard.addEventListener("click", (event) => {
+  const target = event.target as HTMLElement;
+  if (!target.closest("[data-close-panel]")) return;
+  planetCard.hidden = true;
+  skyApp?.resetSolarSystemView();
 });
 
 form.city.addEventListener("change", () => {
@@ -148,12 +164,12 @@ form.addEventListener("submit", async (event) => {
     time: String(data.get("time") || "21:00"),
     latitude: Number(data.get("latitude")),
     longitude: Number(data.get("longitude")),
-    cityName: String(data.get("city") || "Secili konum")
+    cityName: String(data.get("city") || "Seçili konum")
   };
 
   try {
     validateInput(input);
-    const location = resolveLocation(input.cityName || "Secili konum", input.latitude, input.longitude);
+    const location = resolveLocation(input.cityName || "Seçili konum", input.latitude, input.longitude);
     await startSky(input, location);
   } catch (error) {
     console.error("Submit error:", error);
@@ -184,17 +200,17 @@ async function startSky(input: BirthInput, location: ResolvedLocation): Promise<
       });
     },
     onStatus: (status) => {
-      sceneStatus.textContent = `${status} · ${location.name} · ${location.timezone}`;
+      sceneStatus.textContent = status;
     },
     onSolarSystemReady: (ready) => {
       resetView.hidden = !ready;
       animToggle.hidden = !ready;
       if (!ready) {
         planetCard.hidden = true;
-        // Layer değişince animasyonu sifırla
+        // Katman değişince animasyonu sıfırla.
         animEnabled = false;
         skyApp?.setSolarAnimation(false);
-        animToggle.textContent = "▶ Zaman";
+        animToggle.textContent = "Zaman";
         animToggle.classList.remove("active");
       }
     },
@@ -207,11 +223,12 @@ async function startSky(input: BirthInput, location: ResolvedLocation): Promise<
       if (info.type === "star") {
         planetCard.innerHTML = `
           <div class="card-header">
-            <span class="card-symbol" style="color:${info.colorDesc.includes('Mavi') ? '#9fb9e8' : info.colorDesc.includes('Sarı') ? '#ffe28a' : info.colorDesc.includes('Kırmızı') ? '#ff8a8a' : '#fff'}">✨</span>
+            <span class="card-symbol" style="color:${info.colorDesc.includes('Mavi') ? '#9fb9e8' : info.colorDesc.includes('Sarı') ? '#ffe28a' : info.colorDesc.includes('Kırmızı') ? '#ff8a8a' : '#fff'}">★</span>
             <div>
               <p class="card-kicker">Parlak Yıldız</p>
               <h2>${info.name}</h2>
             </div>
+            <button class="panel-close" type="button" data-close-panel aria-label="Bilgi kartını kapat">×</button>
           </div>
           <div class="card-grid">
             <div class="card-section"><p class="card-label">Takımyıldız</p><p class="card-value">${info.con}</p></div>
@@ -231,11 +248,12 @@ async function startSky(input: BirthInput, location: ResolvedLocation): Promise<
       if (info.type === "constellation") {
         planetCard.innerHTML = `
           <div class="card-header">
-            <span class="card-symbol" style="color: #94b2e4;">🌌</span>
+            <span class="card-symbol" style="color: #94b2e4;">✦</span>
             <div>
               <p class="card-kicker">Takımyıldız</p>
               <h2>${info.nameTR}</h2>
             </div>
+            <button class="panel-close" type="button" data-close-panel aria-label="Bilgi kartını kapat">×</button>
           </div>
           <div class="card-grid">
             <div class="card-section"><p class="card-label">Latince Adı</p><p class="card-value">${info.name} (${info.id})</p></div>
@@ -253,7 +271,7 @@ async function startSky(input: BirthInput, location: ResolvedLocation): Promise<
       const kmStr = info.distanceKm.toLocaleString("tr-TR");
       const zodiacStr = `${info.zodiacSign} ${info.zodiacDegree}°`;
       const generationalNote = info.isGenerational
-        ? `<p class="card-note">⚠️ Kuşak gezegeni: etkisi bireysel değil, toplumsal/kuşaksal okunur.</p>`
+        ? `<p class="card-note">Kuşak gezegeni: etkisi bireysel değil, toplumsal/kuşaksal okunur.</p>`
         : "";
       const aspectSection = info.name !== "Güneş" && info.aspectText
         ? `<div class="card-section"><p class="card-label">Güneş ile Açı</p><p class="card-text">${info.aspectText}</p></div>`
@@ -265,6 +283,7 @@ async function startSky(input: BirthInput, location: ResolvedLocation): Promise<
             <p class="card-kicker">Gezegen odağı</p>
             <h2>${info.name}</h2>
           </div>
+          <button class="panel-close" type="button" data-close-panel aria-label="Bilgi kartını kapat">×</button>
         </div>
         <div class="card-grid">
           <div class="card-section"><p class="card-label">Zodyak Konumu</p><p class="card-value">${zodiacStr}</p></div>
@@ -277,7 +296,7 @@ async function startSky(input: BirthInput, location: ResolvedLocation): Promise<
         </div>
         ${aspectSection}
         ${generationalNote}
-        <p class="card-disclaimer">ℹ️ Astrolojik yorumlar eğlence/ilham amaçlıdır.</p>
+        <p class="card-disclaimer">Astrolojik yorumlar eğlence ve ilham amaçlıdır.</p>
       `;
       planetCard.hidden = false;
     }
@@ -297,9 +316,9 @@ async function loadCities(): Promise<void> {
 }
 
 function validateInput(input: BirthInput): void {
-  if (!input.date) throw new Error("Dogum tarihi zorunlu.");
-  if (!Number.isFinite(input.latitude) || !Number.isFinite(input.longitude)) throw new Error("Gecerli enlem/boylam gir.");
-  if (Math.abs(input.latitude) > 90 || Math.abs(input.longitude) > 180) throw new Error("Enlem veya boylam aralik disinda.");
+  if (!input.date) throw new Error("Doğum tarihi zorunlu.");
+  if (!Number.isFinite(input.latitude) || !Number.isFinite(input.longitude)) throw new Error("Geçerli enlem/boylam gir.");
+  if (Math.abs(input.latitude) > 90 || Math.abs(input.longitude) > 180) throw new Error("Enlem veya boylam aralık dışında.");
 }
 
 function isWebGlAvailable(): boolean {

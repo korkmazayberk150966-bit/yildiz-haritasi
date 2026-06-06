@@ -60,7 +60,7 @@ export function createVolumetricNebula(cfg: NebulaConfig): THREE.Points {
     colors[i * 3 + 2] = Math.max(0, c.b);
 
     // Boyut: merkeze yakın büyük ve yoğun, dışta küçük ve seyrek
-    aSizes[i] = 0.7 + Math.random() * 2.2 + (1 - r) * 1.4;
+    aSizes[i] = 0.55 + Math.random() * 1.45 + (1 - r) * 0.9;
 
     // Opaklık: üstel düşüş + rastgele varyasyon
     const falloff = Math.pow(1 - r, 0.7);
@@ -76,7 +76,7 @@ export function createVolumetricNebula(cfg: NebulaConfig): THREE.Points {
   const mat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
+    blending: THREE.NormalBlending,
     vertexColors: true,
     uniforms: {
       uPixelRatio: { value: pr }
@@ -94,7 +94,7 @@ export function createVolumetricNebula(cfg: NebulaConfig): THREE.Points {
         vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
         // Yakın → büyük, uzak → küçük ama en küçük 2px
         float dist = max(0.1, -mvPos.z);
-        gl_PointSize = clamp(aSize * uPixelRatio * 220.0 / dist, 2.0, 48.0);
+        gl_PointSize = clamp(aSize * uPixelRatio * 180.0 / dist, 1.2, 34.0);
         gl_Position = projectionMatrix * mvPos;
       }
     `,
