@@ -98,6 +98,7 @@ export class SkyApp {
   }
 
   setLayer(layer: LayerId): void {
+    this.resetPointerState();
     this.activeLayer = layer;
     for (const [id, group] of this.groups) group.visible = id === layer;
     this.zoom = LAYERS.indexOf(layer) + 1;
@@ -632,6 +633,21 @@ export class SkyApp {
     }, { passive: false });
 
     window.addEventListener("resize", () => this.resize());
+  }
+
+  private resetPointerState(): void {
+    const canvas = this.renderer.domElement;
+    for (const pointerId of this.activePointers.keys()) {
+      try {
+        if (canvas.hasPointerCapture(pointerId)) canvas.releasePointerCapture(pointerId);
+      } catch {
+        // Pointer capture can already be gone after browser-level cancel/navigation gestures.
+      }
+    }
+    this.activePointers.clear();
+    this.lastPinchDistance = undefined;
+    this.dragging = false;
+    this.pointerDownAt = undefined;
   }
 
   private applyQuality(profile: QualityProfile): void {
